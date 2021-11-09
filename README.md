@@ -1,0 +1,2 @@
+# GBot
+discord bot
