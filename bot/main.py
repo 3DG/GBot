@@ -80,7 +80,7 @@ helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and sca
 async def help(ctx, cmdorpage=0):
   send = ""
   cmds = len(bot.commands)
-  for cmd in range(1, math.min(cmds)):
+  for cmd in bot.commands:
     send += "`g!"+str(cmd)+"`" + " - " + helpdef.get(str(cmd))+'''\n'''
   await ctx.send(send)
 
