@@ -10,7 +10,8 @@ from PIL import Image
 from time import mktime
 from discord.ext import commands as cmds
 token = ""
-bot = cmds.Bot(command_prefix="g!",help_command=None)
+prefix = "g!"
+bot = cmds.Bot(command_prefix=prefix,help_command=None)
 
 def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvexyz"):
   retstr = ""
