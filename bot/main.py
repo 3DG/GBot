@@ -71,6 +71,13 @@ async def pixel(ctx, scalewid=32, scalehgt=None):
       os.remove("./temp/img/"+fileName+"pixel.png")
   else:
     await ctx.send("This command requires an image!")
+    
+#echo command
+@bot.command()
+async def echo(ctx):
+  await ctx.send(str(ctx.message.content)[(4 + len(prefix)) : len(str(ctx.message.content))])
+  await ctx.message.delete()
+
 #help command
 helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and scales it back up (Arguments: [Scale X factor, Scale Y factor])",
            "jpegify":"Requires an image. Returns a low quality jpg of the image sent (Arguments: [Quality])",
