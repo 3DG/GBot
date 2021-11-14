@@ -15,8 +15,8 @@ from discord.ext import commands as cmds
 token = ""
 prefix = "g!"
 bot = cmds.Bot(command_prefix=prefix,help_command=None)
-versionnum = 0.4
-revision = 2
+versionnum = 0.5
+revision = 0
 def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
   retstr = ""
   for i in range(length):
