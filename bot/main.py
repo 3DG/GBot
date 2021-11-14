@@ -116,34 +116,38 @@ async def pixel(ctx, scalewid=None, scalehgt=None, scalemode=None):
     await ctx.send("Scale factors must be a number")
   finally:
     scalewid = float(scalewid)
-    if ctx.message.attachments != []:
-      if scalehgt == None:
+    if scalehgt == None:
         scalehgt = scalewid
+    try:
       scalehgt = float(scalehgt)
-      if int(scalewid) < 1.0 or int(scalehgt) < 1.0:
-        await ctx.send("Scale factor must be more than 1")
-      else:
-        url = ctx.message.attachments[0].url
-        if url.endswith(".png") or url.endswith(".jpg") or url.endswith(".gif"):
-          imgdata = requests.get(url)
-          img = Image.open(toimg(imgdata.content))
-          fileName = randomStr(24)
-          img = img.convert("RGBA")
-          wid, hgt = img.size
-          img = img.resize((round(wid/scalewid)+1,round(hgt/scalehgt)+1),resample=Image.BILINEAR)
-          if scalemode == 0:
-            img = img.resize((wid,hgt), resample=Image.NEAREST)
-          else:
-            img = img.resize((wid,hgt), resample=Image.BILINEAR)
-          img.save("./temp/img/"+fileName+"pixel.png")
-          file = open("./temp/img/"+fileName+"pixel.png", "rb", buffering = 0)
-          await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png"))
-          file.close()
-          os.remove("./temp/img/"+fileName+"pixel.png")
+    except:
+      await ctx.send("Scale factors must be a number")
+    finally:
+      if ctx.message.attachments != []:
+        if int(scalewid) < 1.0 or int(scalehgt) < 1.0:
+          await ctx.send("Scale factor must be more than 1")
         else:
-          await ctx.send("Your image must be a PNG, JPG, or GIF image.")
-    else:
-      await ctx.send("This command requires an image!")
+          url = ctx.message.attachments[0].url
+          if url.endswith(".png") or url.endswith(".jpg") or url.endswith(".gif"):
+            imgdata = requests.get(url)
+            img = Image.open(toimg(imgdata.content))
+            fileName = randomStr(24)
+            img = img.convert("RGBA")
+            wid, hgt = img.size
+            img = img.resize((round(wid/scalewid)+1,round(hgt/scalehgt)+1),resample=Image.BILINEAR)
+            if scalemode == 0:
+              img = img.resize((wid,hgt), resample=Image.NEAREST)
+            else:
+              img = img.resize((wid,hgt), resample=Image.BILINEAR)
+            img.save("./temp/img/"+fileName+"pixel.png")
+            file = open("./temp/img/"+fileName+"pixel.png", "rb", buffering = 0)
+            await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png"))
+            file.close()
+            os.remove("./temp/img/"+fileName+"pixel.png")
+          else:
+            await ctx.send("Your image must be a PNG, JPG, or GIF image.")
+      else:
+        await ctx.send("This command requires an image!")
 #help command
 helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and scales it back up (Arguments: [Scale X factor, Scale Y factor, Scaling algorithm (0 - Nearest, 1 - Bilinear)])",
   "echo":"Make the bot say anything! (Arguments: {Message})",
@@ -179,7 +183,7 @@ def filter(message):
   return retstr
 @bot.event
 async def on_message(ctx):
-  filterchannelid = 907790324997443634 # paste your channel id here
+  filterchannelid = # paste your channel id here
   if ctx.channel.id == filterchannelid and ctx.author.bot == False:
     url = "" #put your filter webhook url here
     avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256"
