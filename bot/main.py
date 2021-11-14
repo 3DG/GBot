@@ -12,8 +12,9 @@ from io import BytesIO as toimg
 from PIL import Image, ImageFont, ImageDraw
 from time import mktime
 from discord.ext import commands as cmds
-token = ""
+token = "" # put your bot token here
 prefix = "g!"
+appid = # put your application id here
 bot = cmds.Bot(command_prefix=prefix,help_command=None)
 versionnum = 0.5
 revision = 3
@@ -160,10 +161,15 @@ helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and sca
 @bot.command()
 async def help(ctx, cmdorpage=0):
   send = ""
+  embed = discord.Embed(title="Commands", color=discord.Color(1977406))
   #cmds = len(bot.commands)
   for cmd in bot.commands:
     send += "`g!"+str(cmd)+"`" + " - " + str(helpdef.get(str(cmd)))+'''\n'''
-  await ctx.send(send)
+  embed.add_field(name="All commands", value=send)
+  #buttonprevpage = discord.ui.Button(label="prev page", custom_id="prev")
+  
+  #buttonprevpage.coroutine = discord.Interaction(id=random.randint(0, 1000000000), type=discord.InteractionType("component"), application_id=appid)
+  await ctx.send(embed = embed)
 
 #echo command
 @bot.command()
@@ -183,7 +189,7 @@ def filter(message):
   return retstr
 @bot.event
 async def on_message(ctx):
-  filterchannelid = # paste your channel id here
+  filterchannelid = 907790324997443634 # paste your channel id here
   if ctx.channel.id == filterchannelid and ctx.author.bot == False:
     url = "" #put your filter webhook url here
     avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256"
