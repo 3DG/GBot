@@ -12,9 +12,9 @@ from io import BytesIO as toimg
 from PIL import Image, ImageFont, ImageDraw
 from time import mktime
 from discord.ext import commands as cmds
-token = "" # put your bot token here
+token = ""
 prefix = "g!"
-appid = # put your application id here
+appid = 907439983579758632
 bot = cmds.Bot(command_prefix=prefix,help_command=None)
 versionnum = 0.5
 revision = 3
@@ -74,8 +74,8 @@ async def caption(ctx, caption):
       img = Image.open(toimg(imgdata.content))
       img = img.convert("RGBA")
       wid, hgt = img.size
-      usefont = ImageFont.truetype("Roboto-Black.ttf", round((hgt/wid)/3*(wid/10)*3))
-      stringtoputinimg = textwrap.wrap(caption, width=round(wid/((hgt/wid)/3*(wid/20)*3)))
+      usefont = ImageFont.truetype("captfont.ttf", round((hgt/wid)/3*(wid/10)*3))
+      stringtoputinimg = textwrap.wrap(caption, width=round(wid/((hgt/wid)/3*(wid/17)*3)))
       caption = ''''''
       for txt in range(len(stringtoputinimg)):
         caption += stringtoputinimg[txt]
