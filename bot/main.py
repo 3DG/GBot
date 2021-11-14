@@ -16,7 +16,7 @@ token = ""
 prefix = "g!"
 bot = cmds.Bot(command_prefix=prefix,help_command=None)
 versionnum = 0.5
-revision = 0
+revision = 1
 def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
   retstr = ""
   for i in range(length):
@@ -125,16 +125,19 @@ async def pixel(ctx, scalewid=24.0, scalehgt=None):
     await ctx.send("This command requires an image!")
 #help command
 helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and scales it back up (Arguments: [Scale X factor, Scale Y factor])",
-           "echo":"Make the bot say anything! (Arguments: {Message})",
-           "jpegify":"Requires an image. Returns a low quality jpg of the image sent (Arguments: [Quality])",
-           "help":"Shows a list of commands",
-           "ping":"Gets your ping to the bot"}
+  "echo":"Make the bot say anything! (Arguments: {Message})",
+  "caption":"Requires an image. Adds a caption to any image (Arguments: {Caption})",
+  "version":"Sends the version number",
+  "jpegify":"Requires an image. Returns a low quality jpg of the image sent (Arguments: [Quality])",
+  "help":"Shows a list of commands",
+  "ping":"Gets your ping to the bot"
+}
 @bot.command()
 async def help(ctx, cmdorpage=0):
   send = ""
-  cmds = len(bot.commands)
+  #cmds = len(bot.commands)
   for cmd in bot.commands:
-    send += "`g!"+str(cmd)+"`" + " - " + helpdef.get(str(cmd))+'''\n'''
+    send += "`g!"+str(cmd)+"`" + " - " + str(helpdef.get(str(cmd)))+'''\n'''
   await ctx.send(send)
 
 #echo command
@@ -155,7 +158,7 @@ def filter(message):
   return retstr
 @bot.event
 async def on_message(ctx):
-  filterchannelid = # paste your channel id here
+  filterchannelid = 907790324997443634 # paste your channel id here
   if ctx.channel.id == filterchannelid and ctx.author.bot == False:
     url = "" #put your filter webhook url here
     avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256"
