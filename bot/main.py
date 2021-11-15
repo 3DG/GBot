@@ -15,7 +15,8 @@ from discord.ext import commands as cmds
 token = "" # discord token
 prefix = "g!" # bot prefix
 appid = 907439983579758632 # app id
-bot = cmds.Bot(command_prefix=prefix,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
+activity = discord.Activity(type=discord.ActivityType.watching, name="you (Prefix: "+prefix+")")
+bot = cmds.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
 versionnum = 0.5 # version number
 revision = 3 # revision number
 def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
@@ -165,7 +166,7 @@ helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and sca
   "ping":"Gets your ping to the bot"
 } # dictionary containing all of the descriptions for the commands
 @bot.command()
-async def help(ctx, cmdorpage):
+async def help(ctx, cmdorpage=None):
   send = ""
   embed = discord.Embed(title="Commands", color=discord.Color(1977406)) # make a new embed with title "Commands" with color #1e2c3e
   #cmds = len(bot.commands)
@@ -180,7 +181,7 @@ async def help(ctx, cmdorpage):
 #echo command
 @bot.command()
 async def echo(ctx): # echo command ok this should be simple
-  await ctx.send(str(ctx.message.content)[(4 + len(prefix)) : len(str(ctx.message.content))]) # slice the first 5 + prefix length characters off the message and send it
+  await ctx.send("``"+str(ctx.message.content)[(5 + len(prefix)) : len(str(ctx.message.content))].replace("`", "'")+"``") # slice the first 5 + prefix length characters off the message and send it
   await ctx.message.delete() # delete the message
 
 #filter-chat in 3dg's discord
