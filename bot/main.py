@@ -17,8 +17,8 @@ prefix = "g!" # bot prefix
 appid = 907439983579758632 # app id
 activity = discord.Activity(type=discord.ActivityType.watching, name="a bajillion servers (Prefix: "+prefix+")")
 bot = cmds.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
-versionnum = 0.5 # version number
-revision = 3 # revision number
+versionnum = 0.6 # version number
+revision = 0 # revision number
 def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
   retstr = "" # make a blank string to return later
   for i in range(length): #repeat length times
