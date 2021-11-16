@@ -15,7 +15,7 @@ from discord.ext import commands as cmds
 token = "" # discord token
 prefix = "g!" # bot prefix
 appid = 907439983579758632 # app id
-activity = discord.Activity(type=discord.ActivityType.watching, name="you (Prefix: "+prefix+")")
+activity = discord.Activity(type=discord.ActivityType.watching, name="a bajillion servers (Prefix: "+prefix+")")
 bot = cmds.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
 versionnum = 0.5 # version number
 revision = 3 # revision number
@@ -65,8 +65,11 @@ async def jpegify(ctx, quality):
 
 #fairly simple command
 @bot.command()
-async def version(ctx):
-  await ctx.send("GBot is on version "+str(versionnum)+"abcdefghijklmnopqrstuvwxyz"[revision])
+async def info(ctx):
+  embed = discord.Embed(title="Bot information", color=discord.Color(7312382))
+  embed.add_field(name="Version:", value=str(versionnum)+"abcdefghijklmnopqrstuvwxyz"[revision], inline=True)
+  embed.add_field(name="Servers", value="I am in "+str(len(bot.guilds))+" servers", inline=True)
+  await ctx.send(embed=embed)
 #caption img command
 @bot.command()
 async def caption(ctx, caption):
@@ -160,7 +163,7 @@ async def pixel(ctx, scalewid=None, scalehgt=None, scalemode=None):
 helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and scales it back up (Arguments: [Scale X factor, Scale Y factor, Scaling algorithm (0 - Nearest, 1 - Bilinear)])",
   "echo":"Make the bot say anything! (Arguments: {Message})",
   "caption":"Requires an image. Adds a caption to any image (Arguments: {Caption})",
-  "version":"Sends the version number",
+  "info":"Sends information about the bot",
   "jpegify":"Requires an image. Returns a low quality jpg of the image sent (Arguments: [Quality])",
   "help":"Shows a list of commands",
   "ping":"Gets your ping to the bot"
