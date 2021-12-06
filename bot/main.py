@@ -15,7 +15,7 @@ from discord.ext import commands as cmds
 token = "" # discord token
 prefix = "g!" # bot prefix
 appid = 907439983579758632 # app id
-activity = discord.Activity(type=discord.ActivityType.watching, name="a bajillion servers (Prefix: "+prefix+")")
+activity = discord.Activity(type=discord.ActivityType.watching, name="you (Prefix: "+prefix+")")
 bot = cmds.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
 versionnum = 0.6 # version number
 revision = 0 # revision number
@@ -63,6 +63,64 @@ async def jpegify(ctx, quality):
     else: # if no attachment is attached
       await ctx.send("This command requires an image!") # notify the user
 
+#brainfuck
+@bot.command()
+async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++>-]>++++++[<+++++>-]>+++++++++++++++[<+++++++>-]<<<<--.>+.>++.>.<<-.++.+++++.-.>.>--.++.<<++.>>----.<<--------.>+."):
+  buffer = []
+  output = ""
+  inLoop = 0
+  skip = False
+  active = True
+  pointer = 0
+  for slot in range(256):
+    buffer.append(0)
+  ind = 0
+  loopChars = []
+  loopChars.append(0)
+  while ind < len(code) and active == True:
+    if pointer < 0 or pointer > 255:
+      await ctx.send("Error! (Pointer out of range!)")
+      active = False
+    if active == True:
+      ind += 1
+      cmd = code[ind-1]
+      print(cmd)
+      if cmd == ">":
+        pointer += 1
+      elif cmd == "<":
+        pointer -= 1
+      elif cmd == "+":
+        buffer[pointer] += 1
+        buffer[pointer] = buffer[pointer] % 256
+      elif cmd == "-":
+        buffer[pointer] -= 1
+        buffer[pointer] = buffer[pointer] % 256
+      elif cmd == "[":
+        inLoop = inLoop+1
+        loopChars.append(ind)
+      elif cmd == "]":
+        if inLoop >= 1:
+          if buffer[pointer] != 0:
+            ind = loopChars[inLoop]
+          else:
+            loopChars.pop(inLoop)
+            inLoop = inLoop - 1
+        else:
+          await ctx.send("Error! (Mismatched parenthesis!)");
+          active = False
+      elif cmd == ".":
+        output = output + str(chr(buffer[pointer]))
+      elif cmd == ",":
+        ctx.send("Input is not supported yet.")
+        active = False
+  if inLoop != 0:
+    active = False
+    await ctx.send("Error! (End of loop not declared.)")
+  if active == True:
+    textfile = open("buffer.txt", "r+")
+    textfile.write(str(buffer))
+    await ctx.send((output if output != "" else "No output given.") + '''\n''' + "Buffer:", file = discord.File(textfile))
+    textfile.close()
 #fairly simple command
 @bot.command()
 async def info(ctx):
@@ -166,7 +224,8 @@ helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and sca
   "info":"Sends information about the bot",
   "jpegify":"Requires an image. Returns a low quality jpg of the image sent (Arguments: [Quality])",
   "help":"Shows a list of commands",
-  "ping":"Gets your ping to the bot"
+  "ping":"Gets your ping to the bot",
+  "brainfrick":"Runs brainf█:k code. (Arguments: {Code})"
 } # dictionary containing all of the descriptions for the commands
 @bot.command()
 async def help(ctx, cmdorpage=None):
@@ -198,12 +257,18 @@ def filter(message): #filter
   return retstr #return the string
 @bot.event
 async def on_message(ctx):
-  filterchannelid = 907790324997443634 # paste your channel id here
+  filterchannelid =  # paste your filtered chat channel id here
   if ctx.channel.id == filterchannelid and ctx.author.bot == False: # if message is in filter channel and author isnt a bot (to prevent webhook spam)
     url = "" #put your filter webhook url here
     avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256" # get user avatar url in 256p
     data = {"username":ctx.author.name,"avatar_url":avatar,"content":filter(ctx.content),"embeds":None} # data to send to the webhook
     response = req.post(url, data=data) # send it to the webhook
     await ctx.delete() # delete the message
+  if ctx.channel.id == 910303286521905193:
+    url = "" #put your guilded webhook url here
+    avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256" # get user avatar url in 256p
+    data = {"username":ctx.author.name,"avatar_url":avatar,"content":ctx.author.name + ": " +ctx.content,"attachments":ctx.attachments,"embeds":None} # data to send to the webhook
+    response = req.post(url, data=data) # send it to the webhook
+    
   await bot.process_commands(ctx) # process commands again so bot doesnt break
 bot.run(token)#run the bot
