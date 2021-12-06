@@ -18,7 +18,7 @@ appid = 907439983579758632 # app id
 activity = discord.Activity(type=discord.ActivityType.watching, name="you (Prefix: "+prefix+")")
 bot = cmds.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
 versionnum = 0.6 # version number
-revision = 0 # revision number
+revision = 1 # revision number
 def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
   retstr = "" # make a blank string to return later
   for i in range(length): #repeat length times
@@ -72,7 +72,7 @@ async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++
   skip = False
   active = True
   pointer = 0
-  for slot in range(256):
+  for slot in range(128):
     buffer.append(0)
   ind = 0
   loopChars = []
@@ -84,7 +84,6 @@ async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++
     if active == True:
       ind += 1
       cmd = code[ind-1]
-      print(cmd)
       if cmd == ">":
         pointer += 1
       elif cmd == "<":
@@ -117,17 +116,48 @@ async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++
     active = False
     await ctx.send("Error! (End of loop not declared.)")
   if active == True:
-    textfile = open("buffer.txt", "r+")
-    textfile.write(str(buffer))
-    await ctx.send((output if output != "" else "No output given.") + '''\n''' + "Buffer:", file = discord.File(textfile))
-    textfile.close()
+    embed = discord.Embed(title="Brainfrick")
+    string = ""
+    for index in range(len(buffer)):
+      string += ("0" + str(hex(buffer[index]))[2:4] if len(str(hex(buffer[index]))[2:4]) == 1 else str(hex(buffer[index]))[2:4]) + " "
+      if index%16 == 15:
+        string += """\n"""
+    embed.add_field(name="Input:",value="""```bf\n"""+code+"```",inline=False)
+    embed.add_field(name="Output:",value="```"+output+"```",inline=False)
+    await ctx.send(embed = embed)
+    embed = discord.Embed(title="Buffer:")
+    print(string)
+    embed.add_field(name="Buffer:",value="```"+string+"```")
+    await ctx.send(embed = embed)
 #fairly simple command
 @bot.command()
 async def info(ctx):
   embed = discord.Embed(title="Bot information", color=discord.Color(7312382))
   embed.add_field(name="Version:", value=str(versionnum)+"abcdefghijklmnopqrstuvwxyz"[revision], inline=True)
-  embed.add_field(name="Servers", value="I am in "+str(len(bot.guilds))+" servers", inline=True)
+  embed.add_field(name="Servers:", value="I am in "+str(len(bot.guilds))+" servers", inline=True)
   await ctx.send(embed=embed)
+#eval command
+@bot.command()
+async def eval(ctx):
+  msg = ctx.message.content
+  code = msg[(len(prefix)+5):(len(msg)+1)]
+  print(code)
+  embed = discord.Embed(title="Lorem Ipsum", color=discord.Color(16777215))
+  if ctx.author.id == 353911350545612801:
+    try:
+      output = await eval(code)
+      embed.color = discord.Color(196607)
+      embed.add_field(name="Input:", value="""```py\n"""+code+"```")
+      embed.add_field(name="Output:", value="```"+output+"```")
+      embed.title = "Code ran fine!"
+      await ctx.send(embed=embed)
+    except Exception as error:
+      embed.title = "Error!"
+      embed.color = discord.Color(8388608)
+      embed.add_field(name="Error:", value="""```diff\n- """+str(error)+"```")
+      await ctx.send(embed=embed)
+  else:
+    await ctx.send("Only the bot developer can run this command!")
 #caption img command
 @bot.command()
 async def caption(ctx, caption):
@@ -257,18 +287,17 @@ def filter(message): #filter
   return retstr #return the string
 @bot.event
 async def on_message(ctx):
-  filterchannelid =  # paste your filtered chat channel id here
+  filterchannelid = # paste your filtered channel id here
   if ctx.channel.id == filterchannelid and ctx.author.bot == False: # if message is in filter channel and author isnt a bot (to prevent webhook spam)
     url = "" #put your filter webhook url here
     avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256" # get user avatar url in 256p
     data = {"username":ctx.author.name,"avatar_url":avatar,"content":filter(ctx.content),"embeds":None} # data to send to the webhook
     response = req.post(url, data=data) # send it to the webhook
     await ctx.delete() # delete the message
-  if ctx.channel.id == 910303286521905193:
+  if ctx.channel.id == 0: #put your guilded chat id here
     url = "" #put your guilded webhook url here
     avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256" # get user avatar url in 256p
     data = {"username":ctx.author.name,"avatar_url":avatar,"content":ctx.author.name + ": " +ctx.content,"attachments":ctx.attachments,"embeds":None} # data to send to the webhook
     response = req.post(url, data=data) # send it to the webhook
-    
   await bot.process_commands(ctx) # process commands again so bot doesnt break
 bot.run(token)#run the bot
