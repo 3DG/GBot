@@ -9,16 +9,16 @@ import random
 import requests
 import textwrap
 from io import BytesIO as toimg
-from PIL import Image, ImageFont, ImageDraw
+from PIL import Image, ImageFont, ImageDraw, ImageOps
 from time import mktime
 from discord.ext import commands as cmds
-token = "" # discord token
+token = "OTA3NDM5OTgzNTc5NzU4NjMy.YYnNVw.92Xzw1ETdqjR0lA1Mdk9dTT1paI" # discord token
 prefix = "g!" # bot prefix
 appid = 907439983579758632 # app id
 activity = discord.Activity(type=discord.ActivityType.watching, name="you (Prefix: "+prefix+")")
 bot = cmds.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
-versionnum = 0.6 # version number
-revision = 1 # revision number
+versionnum = 0.7 # version number
+revision = 0 # revision number
 def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
   retstr = "" # make a blank string to return later
   for i in range(length): #repeat length times
@@ -126,7 +126,6 @@ async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++
     embed.add_field(name="Output:",value="```"+output+"```",inline=False)
     await ctx.send(embed = embed)
     embed = discord.Embed(title="Buffer:")
-    print(string)
     embed.add_field(name="Buffer:",value="```"+string+"```")
     await ctx.send(embed = embed)
 #fairly simple command
@@ -141,7 +140,6 @@ async def info(ctx):
 async def eval(ctx):
   msg = ctx.message.content
   code = msg[(len(prefix)+5):(len(msg)+1)]
-  print(code)
   embed = discord.Embed(title="Lorem Ipsum", color=discord.Color(16777215))
   if ctx.author.id == 353911350545612801:
     try:
@@ -195,6 +193,13 @@ async def caption(ctx, caption):
   else:
     await ctx.send("This command requires an image!")
 
+@bot.command()
+async def duck(ctx, code=None):
+  if code == None:
+    await ctx.send("No input given.")
+  else:
+    await ctx.send("Hello world")
+
 #pixel image command
 @bot.command()
 async def pixel(ctx, scalewid=None, scalehgt=None, scalemode=None):
@@ -246,7 +251,57 @@ async def pixel(ctx, scalewid=None, scalehgt=None, scalemode=None):
         await ctx.send("This command requires an image!")
 
 #finally thank god i dont have to repeat the same comments over and over
-        
+
+#future 3dg to past 3dg: you got pranked :troll:
+@bot.command()
+async def lightdark(ctx, scalemode=None):
+  if scalemode == None: # if scale mode isnt set
+    scalemode = 0 #set to nearest
+  try: #see if scalemode is an integer
+    scalemode = int(scalemode)
+  except: #if it isnt
+    scalemode = 0 #set it to nearest
+  if ctx.message.attachments != []: # if images are attached
+    if len(ctx.message.attachments) == 2: # 2 of them
+      url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+      urltwo = ctx.message.attachments[1].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+      if url.endswith(".png") or url.endswith(".jpg") or url.endswith(".gif"):
+        imgdata = requests.get(url)
+        img = Image.open(toimg(imgdata.content))
+        imgdatatwo = requests.get(urltwo)
+        imgtwo = Image.open(toimg(imgdatatwo.content))
+        fileName = randomStr(24)
+        img = img.convert("RGBA")
+        imgtwo = imgtwo.convert("RGBA")
+        img = img.resize((320, 240), resample=Image.BILINEAR) #resize image with bilinear
+        imgtwo = imgtwo.resize((320, 240), resample=Image.BILINEAR) #resize image with bilinear
+        img = ImageOps.grayscale(img)
+        imgtwo = ImageOps.grayscale(imgtwo)
+        img = img.convert("RGBA")
+        imgtwo = imgtwo.convert("RGBA")
+        imgmix = Image.new("RGBA", (320,240), (255, 255, 255, 255))
+        pixel = 0
+        for y in range(240):
+          for x in range(320):
+            if x%2 == 1:
+              pixel = imgtwo.getpixel((x,y))
+              imgmix.putpixel((x, y), (54, 57, 63, 255-pixel[0]))
+            else:
+              pixel = img.getpixel((x,y))
+              imgmix.putpixel((x, y), (255, 255, 255, pixel[0]))
+        imgmix.save("./temp/img/"+fileName+"bwchange.png") # save to use
+        file = open("./temp/img/"+fileName+"bwchange.png", "rb", buffering = 0) #open file
+        await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
+        file.close() # close file to prevent memory leak
+        os.remove("./temp/img/"+fileName+"bwchange.png") # remove file
+      else:
+        await ctx.send("Your image must be a PNG, JPG, or GIF image.")
+    else:
+      await ctx.send("This command requires 2 images!")
+  else:
+    await ctx.send("This command requires 2 images!")
+
+       
 #help command
 helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and scales it back up (Arguments: [Scale X factor, Scale Y factor, Scaling algorithm (0 - Nearest, 1 - Bilinear)])",
   "echo":"Make the bot say anything! (Arguments: {Message})",
@@ -254,7 +309,10 @@ helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and sca
   "info":"Sends information about the bot",
   "jpegify":"Requires an image. Returns a low quality jpg of the image sent (Arguments: [Quality])",
   "help":"Shows a list of commands",
+  "lightdark":"Requires two images. Mixes two images together to make one that changes with your theme! (Arguments: [Scaling algorithm])",
   "ping":"Gets your ping to the bot",
+  "eval":"This command can only be ran by the bot developer.",
+  "duck":"A Hello world Duck interpreter (Arguments: {Code})",
   "brainfrick":"Runs brainf█:k code. (Arguments: {Code})"
 } # dictionary containing all of the descriptions for the commands
 @bot.command()
@@ -287,15 +345,15 @@ def filter(message): #filter
   return retstr #return the string
 @bot.event
 async def on_message(ctx):
-  filterchannelid = # paste your filtered channel id here
+  filterchannelid = 0 # filtered channel id
   if ctx.channel.id == filterchannelid and ctx.author.bot == False: # if message is in filter channel and author isnt a bot (to prevent webhook spam)
-    url = "" #put your filter webhook url here
+    url = "" #filter webhook
     avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256" # get user avatar url in 256p
     data = {"username":ctx.author.name,"avatar_url":avatar,"content":filter(ctx.content),"embeds":None} # data to send to the webhook
     response = req.post(url, data=data) # send it to the webhook
     await ctx.delete() # delete the message
-  if ctx.channel.id == 0: #put your guilded chat id here
-    url = "" #put your guilded webhook url here
+  if ctx.channel.id == 0: #discord #guilded-chat channel id
+    url = "" #guilded webhook
     avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256" # get user avatar url in 256p
     data = {"username":ctx.author.name,"avatar_url":avatar,"content":ctx.author.name + ": " +ctx.content,"attachments":ctx.attachments,"embeds":None} # data to send to the webhook
     response = req.post(url, data=data) # send it to the webhook
