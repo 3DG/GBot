@@ -12,7 +12,7 @@ from io import BytesIO as toimg
 from PIL import Image, ImageFont, ImageDraw, ImageOps
 from time import mktime
 from discord.ext import commands as cmds
-token = "OTA3NDM5OTgzNTc5NzU4NjMy.YYnNVw.92Xzw1ETdqjR0lA1Mdk9dTT1paI" # discord token
+token = "" # discord token
 prefix = "g!" # bot prefix
 appid = 907439983579758632 # app id
 activity = discord.Activity(type=discord.ActivityType.watching, name="you (Prefix: "+prefix+")")
