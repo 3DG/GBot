@@ -283,7 +283,7 @@ async def lightdark(ctx, scalemode=None):
         pixel = 0
         for y in range(240):
           for x in range(320):
-            if x%2 == 1:
+            if (x+y)%2 == 1:
               pixel = imgtwo.getpixel((x,y))
               imgmix.putpixel((x, y), (54, 57, 63, 255-pixel[0]))
             else:
