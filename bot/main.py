@@ -18,7 +18,7 @@ appid = 907439983579758632 # app id
 activity = discord.Activity(type=discord.ActivityType.watching, name="you (Prefix: "+prefix+")")
 bot = cmds.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
 versionnum = 0.7 # version number
-revision = 1 # revision number
+revision = 2 # revision number
 def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
   retstr = "" # make a blank string to return later
   for i in range(length): #repeat length times
@@ -89,6 +89,7 @@ async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++
     if active == True:
       ind += 1
       cmd = code[ind-1]
+      print(cmd)
       if cmd == ">":
         pointer += 1
       elif cmd == "<":
@@ -100,8 +101,12 @@ async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++
         buffer[pointer] -= 1
         buffer[pointer] = buffer[pointer] % 256
       elif cmd == "[":
-        inLoop = inLoop+1
-        loopChars.append(ind)
+        if buffer[pointer] != 0:
+          inLoop = inLoop+1
+          loopChars.append(ind)
+        else:
+          while (code[ind-1] != "]"):
+            ind += 1
       elif cmd == "]":
         if inLoop >= 1:
           if buffer[pointer] != 0:
@@ -347,7 +352,7 @@ def filter(message): #filter
   return retstr #return the string
 @bot.event
 async def on_message(ctx):
-  filterchannelid = 0 # filtered channel chat
+  filterchannelid = 0 # paste your filter channel id here
   if ctx.channel.id == filterchannelid and ctx.author.bot == False: # if message is in filter channel and author isnt a bot (to prevent webhook spam)
     url = "" #put your filter webhook url here
     avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256" # get user avatar url in 256p
