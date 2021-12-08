@@ -17,8 +17,13 @@ prefix = "g!" # bot prefix
 appid = 907439983579758632 # app id
 activity = discord.Activity(type=discord.ActivityType.watching, name="you (Prefix: "+prefix+")")
 bot = cmds.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
-versionnum = 0.7 # version number
-revision = 2 # revision number
+versionnum = 0.8 # version number
+revision = 0 # revision number
+def hex_format(color):
+  try:
+    return (int(color[0:2], 16),int(color[2:4], 16),int(color[4:6], 16), int(color[6:8], 16) if (len(color) > 7) else 255)
+  except:
+    return "error"
 def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
   retstr = "" # make a blank string to return later
   for i in range(length): #repeat length times
@@ -34,7 +39,87 @@ async def ping(ctx): #ctx = context for message
   timesend = math.floor(((timenow) - (time.timestamp()))*-1000) # the amount of miliseconds to send with the message (the current time - the time the message was sent)
   await ctx.send(':ping_pong: Pong! ('+str(timesend)+' ms)') # await send function
 
+#invert command
+@bot.command()
+async def invert(ctx):
+  if len(ctx.message.attachments) >= 1: # if 1 image is attached
+    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+    if url.endswith(".png") or url.endswith(".jpg") or url.endswith(".gif"):
+      imgdata = requests.get(url)
+      img = Image.open(toimg(imgdata.content))
+      fileName = randomStr(24)
+      img = img.convert("RGBA")
+      wid, hgt = img.size
+      imgmix = Image.new("RGBA", (wid,hgt), (255, 255, 255, 255))
+      pixel = 0
+      for y in range(hgt):
+        for x in range(wid):
+          pixel = img.getpixel((x,y))
+          imgmix.putpixel((x, y), (255-pixel[0], 255-pixel[1], 255-pixel[2], pixel[3]))
+      imgmix.save("./temp/img/"+fileName+"invert.png") # save to use
+      file = open("./temp/img/"+fileName+"invert.png", "rb", buffering = 0) #open file
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
+      file.close() # close file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"invert.png") # remove file
+    else:
+      await ctx.send("Your image must be a PNG, JPG, or GIF image.")
+  else:
+    await ctx.send("This command requires an image!")
 
+#horiz flip command
+@bot.command()
+async def flip(ctx):
+  if len(ctx.message.attachments) >= 1: # if 1 image is attached
+    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+    if url.endswith(".png") or url.endswith(".jpg") or url.endswith(".gif"):
+      imgdata = requests.get(url)
+      img = Image.open(toimg(imgdata.content))
+      fileName = randomStr(24)
+      img = img.convert("RGBA")
+      wid, hgt = img.size
+      imgmix = Image.new("RGBA", (wid,hgt), (255, 255, 255, 255))
+      pixel = 0
+      for y in range(hgt):
+        for x in range(wid):
+          pixel = img.getpixel((x,y))
+          imgmix.putpixel((wid-x-1, y), (pixel[0], pixel[1], pixel[2], pixel[3]))
+      imgmix.save("./temp/img/"+fileName+"flipped.png") # save to use
+      file = open("./temp/img/"+fileName+"flipped.png", "rb", buffering = 0) #open file
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
+      file.close() # close file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"flipped.png") # remove file
+    else:
+      await ctx.send("Your image must be a PNG, JPG, or GIF image.")
+  else:
+    await ctx.send("This command requires an image!")
+#vert flip command
+@bot.command()
+async def flipvert(ctx):
+  if len(ctx.message.attachments) >= 1: # if 1 image is attached
+    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+    if url.endswith(".png") or url.endswith(".jpg") or url.endswith(".gif"):
+      imgdata = requests.get(url)
+      img = Image.open(toimg(imgdata.content))
+      fileName = randomStr(24)
+      img = img.convert("RGBA")
+      wid, hgt = img.size
+      imgmix = Image.new("RGBA", (wid,hgt), (255, 255, 255, 255))
+      pixel = 0
+      for y in range(hgt):
+        for x in range(wid):
+          pixel = img.getpixel((x,y))
+          imgmix.putpixel((x, hgt-y-1), (pixel[0], pixel[1], pixel[2], pixel[3]))
+      imgmix.save("./temp/img/"+fileName+"vflipped.png") # save to use
+      file = open("./temp/img/"+fileName+"vflipped.png", "rb", buffering = 0) #open file
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
+      file.close() # close file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"vflipped.png") # remove file
+    else:
+      await ctx.send("Your image must be a PNG, JPG, or GIF image.")
+  else:
+    await ctx.send("This command requires an image!")
+
+  
 #jpeg image command
 @bot.command()
 async def jpegify(ctx, quality):
@@ -307,10 +392,39 @@ async def lightdark(ctx, scalemode=None):
       await ctx.send("Your image must be a PNG, JPG, or GIF image.")
   else:
     await ctx.send("This command requires 2 images!")
-
-       
+@bot.command()
+async def avatar(ctx):
+  try:
+    idtoget = ctx.message.content.split("@")[1].split(">")[0].split("!")[1]
+    user = await ctx.message.guild.fetch_member(idtoget)
+    print(idtoget)
+    print(user)
+    avatar = "https://cdn.discordapp.com/avatars/"+idtoget+"/"+str(user.avatar)+".webp?size=256" # get user avatar url in 256p
+    avatarpic = requests.get(avatar)
+    Image.open(toimg(avatarpic.content)).convert("RGBA").save("./temp/img/"+idtoget+".png")
+    file = open("./temp/img/"+idtoget+".png", "rb", buffering = 0)
+    await ctx.send(user.name+"'s avatar!", file=discord.File(file, filename="avatar.png"))
+  except Exception as err:
+    print(err)
+    await ctx.send("You must mention a user!")
+@bot.command()
+async def color(ctx, hexcode=None):
+  if hexcode == None:
+    await ctx.send("No hex code given!")
+  elif len(hexcode) >= 6 and len(hexcode) <= 8 and hex_format(hexcode) != "error":
+    name = randomStr(24)
+    Image.new("RGBA", (72, 72), hex_format(hexcode)).save("./temp/img/"+name+"Color.png")
+    file = open("./temp/img/"+name+"Color.png", "rb", buffering = 0)
+    await ctx.send("Color #"+str(hexcode), file=discord.File(file, filename="color.png"))
+    file.close()
+    os.remove("./temp/img/"+name+"Color.png")
+  else:
+    await ctx.send("Not a valid hex code!")
 #help command
-helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and scales it back up (Arguments: [Scale X factor, Scale Y factor, Scaling algorithm (0 - Nearest, 1 - Bilinear)])",
+commandnames = ["avatar","color","pixel","echo","caption","info","jpegify","help","lightdark","ping","eval","invert","flip","flipvert","duck","brainfrick"]
+helpdef = {"avatar":"Gets a user's avatar. (Arguments: {User (mention)})",
+  "color":"Gives an image representing the color inputted. (Arguments: {Hex code})",
+  "pixel":"Requires an image. Lowers the resolution of an image and scales it back up (Arguments: [Scale X factor, Scale Y factor, Scaling algorithm (0 - Nearest, 1 - Bilinear)])",
   "echo":"Make the bot say anything! (Arguments: {Message})",
   "caption":"Requires an image. Adds a caption to any image (Arguments: {Caption})",
   "info":"Sends information about the bot",
@@ -319,17 +433,25 @@ helpdef = {"pixel":"Requires an image. Lowers the resolution of an image and sca
   "lightdark":"Requires two images. Mixes two images together to make one that changes with your theme! The first image will appear in the dark theme, and the second one will appear in the light theme!(Arguments: [Scaling algorithm])",
   "ping":"Gets your ping to the bot",
   "eval":"This command can only be ran by the bot developer.",
+  "invert":"Requires an image. Inverts an image.",
+  "flip":"Requires an image. Flips an image horizontally.",
+  "flipvert":"Requires an image. Flips an image vertically.",   
   "duck":"A Hello world Duck interpreter (Arguments: {Code})",
   "brainfrick":"Runs brainf█:k code. (Arguments: {Code})"
 } # dictionary containing all of the descriptions for the commands
 @bot.command()
-async def help(ctx, cmdorpage=None):
-  send = ""
+async def help(ctx, page=1):
+  try:
+    page = int(page)
+  except:
+    page = 1
+  send = """Commands:\n"""
   embed = discord.Embed(title="Commands", color=discord.Color(1977406)) # make a new embed with title "Commands" with color #1e2c3e
-  #cmds = len(bot.commands)
-  for cmd in bot.commands: # for each command
-    send += "`g!"+str(cmd)+"`" + " - " + str(helpdef.get(str(cmd)))+'''\n''' # add it in send string
-  embed.add_field(name="All commands", value=send) # add the send string to the embed
+  cmds = len(bot.commands)
+  for cmd in range((page-1)*10, min(cmds, (page*10))): # for each command
+    send += "`g!"+str(commandnames[cmd])+"`" + " - " + str(helpdef.get(str(commandnames[cmd])))+'''\n''' # add it in send string
+  embed.add_field(name="Page "+str(page), value=send) # add the send string to the embed
+  embed.set_footer(text="Send g!help "+str(page+1)+" for the next page")
   #buttonprevpage = discord.ui.Button(label="prev page", custom_id="prev")
   
   #buttonprevpage.coroutine = discord.Interaction(id=random.randint(0, 1000000000), type=discord.InteractionType("component"), application_id=appid)
