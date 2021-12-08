@@ -110,7 +110,7 @@ async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++
       elif cmd == ".":
         output = output + str(chr(buffer[pointer]))
       elif cmd == ",":
-        ctx.send("Input is not supported yet.")
+        await ctx.send("Input is not supported yet.")
         active = False
   if inLoop != 0:
     active = False
