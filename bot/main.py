@@ -1,5 +1,6 @@
 #GBot by 3DG
 #You may use this code for any purpose, but make sure to credit me if you're using most of it.
+import sqlite3
 import discord
 import requests as req
 import time as clock
@@ -8,17 +9,24 @@ import math
 import random
 import requests
 import textwrap
+import json
+from statistics import mean
 from io import BytesIO as toimg
 from PIL import Image, ImageFont, ImageDraw, ImageOps, ImageSequence
 from time import mktime
-from discord.ext import commands as cmds
-token = "" # discord token
-prefix = "g!" # bot prefix
+from discord.ext import commands
+con = sqlite3.connect("gBotData.db")
+cur = con.cursor()
+file = open("./keys.json", "rb", buffering = 0)
+jsonstr = str(file.readlines()[0])
+jsonstr = json.loads(jsonstr[2:len(jsonstr)-1])
+token = jsonstr["token"] # discord token
+prefix = jsonstr["prefix"] # bot prefix
 appid = 907439983579758632 # app id
 activity = discord.Activity(type=discord.ActivityType.watching, name="you (Prefix: "+prefix+")")
-bot = cmds.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
+bot = commands.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
 versionnum = 0.9 # version number
-revision = 0 # revision number
+revision = 2 # revision number
 def hex_format(color):
   try:
     return (int(color[0:2], 16),int(color[2:4], 16),int(color[4:6], 16), int(color[6:8], 16) if (len(color) > 7) else 255)
@@ -52,29 +60,164 @@ def get_avg_fps(PIL_Image_object):
     return None
 # stolen stackoverflow code but modified :scream:
 
+#AFK COMMAND!!! first command utilizing a database!
+@bot.command()
+async def afk(ctx):
+  cur.execute("SELECT `id` FROM `users` WHERE id = "+str(ctx.author.id)+" AND server = "+str(ctx.guild.id))
+  if len(cur.fetchall()) == 0:
+    cur.execute("INSERT INTO `users`(`id`, `server`) VALUES (" + str(ctx.author.id) + ", "+ str(ctx.guild.id) +")")
+    con.commit()
+    await ctx.send(ctx.author.name + " is now AFK!")
+    try:
+      await ctx.author.edit(nick=ctx.author.name + " [AFK]")
+    except:
+      print("No permission")
+  else:
+    cur.execute("DELETE FROM `users` WHERE id="+str(ctx.author.id)+" AND server = "+ str(ctx.guild.id))
+    con.commit()
+    await ctx.send(ctx.author.name + " is no longer AFK!")
+    try:
+      if len(ctx.author.name.split(" [AFK]")) == 1:
+        await ctx.author.edit(nick=ctx.author.name.split(" [AFK]")[0])
+    except:
+      print("No permission")
+
+#overlay command
+@bot.command()
+async def overlay(ctx, mode=0):
+  if len(ctx.message.attachments) == 2: # if 2 images are attached
+    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+    urltwo = ctx.message.attachments[1].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+    if (url.lower().endswith(".png") or url.lower().endswith(".jpg") or urltwo.lower().endswith(".png") or urltwo.lower().endswith(".jpg")) and not (url.lower().endswith(".gif") or urltwo.lower().endswith(".gif")):
+      imgdata = requests.get(url)
+      img = Image.open(toimg(imgdata.content))
+      imgdatatwo = requests.get(urltwo)
+      imgtwo = Image.open(toimg(imgdatatwo.content))
+      fileName = randomStr(24)
+      img = img.convert("RGBA")
+      imgtwo = imgtwo.convert("RGBA")
+      wid, hgt = img.size
+      imgtwo = imgtwo.resize((wid, hgt), resample=Image.BILINEAR) #resize image with bilinear
+      
+      for y in range(hgt):
+        for x in range(wid):
+          pixel = imgtwo.getpixel((x,y))
+          imgtwo.putpixel((x, y), (pixel[0], pixel[1], pixel[2], math.floor(pixel[3]/3)))
+      img.paste(imgtwo, (0, 0), imgtwo)
+      img.save("./temp/img/"+fileName+"overlay.png") # save to use
+      file = open("./temp/img/"+fileName+"overlay.png", "rb", buffering = 0) #open file
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
+      file.close() # close file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"overlay.png") # remove file
+    elif url.lower().endswith(".gif") or urltwo.lower().endswith(".gif"):
+      message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
+      frames = []
+      imgdata = requests.get(url)
+      img = Image.open(toimg(imgdata.content))
+      imgdatatwo = requests.get(urltwo)
+      imgtwo = Image.open(toimg(imgdatatwo.content))
+      whichImg = True if url.lower().endswith(".gif") else False
+      if whichImg == True:
+        for frame in ImageSequence.Iterator(img):
+          imgtwo = Image.open(toimg(imgdatatwo.content))
+          imgtwo = imgtwo.convert("RGBA")
+          framedraw = frame.convert("RGBA")
+          wid, hgt = framedraw.size
+          imgtwo = imgtwo.resize((wid, hgt), resample=Image.BILINEAR) #resize image with bilinear
+      
+          for y in range(hgt):
+            for x in range(wid):
+              pixel = imgtwo.getpixel((x,y))
+              imgtwo.putpixel((x, y), (pixel[0], pixel[1], pixel[2], math.floor(pixel[3]/3)))
+          framedraw.paste(imgtwo, (0, 0), imgtwo)
+          byteIO = toimg()
+          frame.save(byteIO, format="GIF")
+          frame = Image.open(byteIO)
+          frames.append(framedraw)
+      else:
+        for frame in ImageSequence.Iterator(imgtwo):
+          img = Image.open(toimg(imgdata.content))
+          img = img.convert("RGBA")
+          framedraw = frame.convert("RGBA")
+          wid, hgt = img.size
+          framedraw = framedraw.resize((wid, hgt), resample=Image.BILINEAR) #resize image with bilinear
+          
+          for y in range(hgt):
+            for x in range(wid):
+              pixel = framedraw.getpixel((x,y))
+              framedraw.putpixel((x, y), (pixel[0], pixel[1], pixel[2], math.floor(pixel[3]/3)))
+          img.paste(framedraw, (0, 0), framedraw)
+          byteIO = toimg()
+          frame.save(byteIO, format="GIF")
+          frame = Image.open(byteIO)
+          frames.append(img)
+        
+      fileName = randomStr(24) #zzzzzzzzzzzz
+      byteIO = toimg()
+      frames[0].save("./temp/img/"+fileName+"overlay.gif", duration = get_avg_fps(img if whichImg else imgtwo), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      file = open("./temp/img/"+fileName+"overlay.gif", "rb", buffering = 0)
+      await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
+      await message.delete() # delete the edited message
+      file.close() # stop using the caption file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"overlay.gif") # delete the caption file
+    else:
+      await ctx.send("Your image must be a PNG, JPG, or GIF image.")
+  else:
+    await ctx.send("This command requires 2 images!")
+    
+# noise command
+@bot.command()
+async def noise(ctx, grayscale=False, wid=None, hgt=None):
+  if wid == None:
+    wid = 200
+  try:
+    wid = max(1, min(int(wid), 512))
+  except:
+    wid = 200
+  finally:
+    if hgt == None:
+      hgt = 150
+    try:
+      hgt = max(1, min(int(hgt), 512))
+    except:
+      hgt = 150
+  grayscale = bool(grayscale)
+  canv = Image.new("RGB", (wid, hgt), (255, 255, 255))
+  for y in range(hgt):
+    for x in range(wid):
+      if grayscale:
+        pix = random.randint(0,255)
+        canv.putpixel((x, y), (pix, pix, pix))
+      else:
+        canv.putpixel((x, y), (random.randint(0,255), random.randint(0,255), random.randint(0,255)))
+  fileName = randomStr(24)
+  canv.save("./temp/img/"+fileName+"noise.png")
+  file = open("./temp/img/"+fileName+"noise.png", "rb", buffering = 0)
+  await ctx.send(file=discord.File(file, filename="noise.png"))
 #invert command
 @bot.command()
 async def invert(ctx):
   if len(ctx.message.attachments) >= 1: # if 1 image is attached
     url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-    if url.endswith(".png") or url.endswith(".jpg"):
-      imgdata = requests.get(url)
-      img = Image.open(toimg(imgdata.content))
-      fileName = randomStr(24)
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg"): # if image is png or jpg
+      imgdata = requests.get(url) # get the image
+      img = Image.open(toimg(imgdata.content)) # open it
+      fileName = randomStr(24) 
       img = img.convert("RGBA")
-      wid, hgt = img.size
-      imgmix = Image.new("RGBA", (wid,hgt), (255, 255, 255, 255))
+      wid, hgt = img.size # get the image size
+      imgmix = Image.new("RGBA", (wid,hgt), (255, 255, 255, 255)) # make a new image with the image size
       pixel = 0
       for y in range(hgt):
         for x in range(wid):
-          pixel = img.getpixel((x,y))
-          imgmix.putpixel((x, y), (255-pixel[0], 255-pixel[1], 255-pixel[2], pixel[3]))
+          pixel = img.getpixel((x,y)) # get pixel 
+          imgmix.putpixel((x, y), (255-pixel[0], 255-pixel[1], 255-pixel[2], pixel[3])) # draw pixel with inverted color to imgmix
       imgmix.save("./temp/img/"+fileName+"invert.png") # save to use
       file = open("./temp/img/"+fileName+"invert.png", "rb", buffering = 0) #open file
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
       file.close() # close file to prevent memory leak
       os.remove("./temp/img/"+fileName+"invert.png") # remove file
-    elif url.endswith(".gif"):
+    elif url.lower().endswith(".gif"):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       frames = []
       imgdata = requests.get(url) # get the image
@@ -111,7 +254,7 @@ async def invert(ctx):
 async def flip(ctx):
   if len(ctx.message.attachments) >= 1: # if 1 image is attached
     url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-    if url.endswith(".png") or url.endswith(".jpg"):
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
       imgdata = requests.get(url)
       img = Image.open(toimg(imgdata.content))
       fileName = randomStr(24)
@@ -122,7 +265,7 @@ async def flip(ctx):
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
       file.close() # close file to prevent memory leak
       os.remove("./temp/img/"+fileName+"flipped.png") # remove file
-    elif url.endswith(".gif"):
+    elif url.lower().endswith(".gif"):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       frames = []
       imgdata = requests.get(url) # get the image
@@ -158,9 +301,11 @@ async def wave(ctx, wavesize=None):
   except:
     wavesize = 20
   finally:
+    if wavesize >= 300:
+      wavesize = 300
     if len(ctx.message.attachments) >= 1: # if 1 image is attached
       url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-      if url.endswith(".png") or url.endswith(".jpg"):
+      if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
         imgdata = requests.get(url)
         img = Image.open(toimg(imgdata.content))
         fileName = randomStr(24)
@@ -177,7 +322,7 @@ async def wave(ctx, wavesize=None):
         await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
         file.close() # close file to prevent memory leak
         os.remove("./temp/img/"+fileName+"wave.png") # remove file
-      elif url.endswith(".gif"):
+      elif url.lower().endswith(".gif"):
         message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
         frames = []
         imgdata = requests.get(url) # get the image
@@ -214,7 +359,7 @@ async def wave(ctx, wavesize=None):
 async def flipvert(ctx):
   if len(ctx.message.attachments) >= 1: # if 1 image is attached
     url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-    if url.endswith(".png") or url.endswith(".jpg"):
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
       imgdata = requests.get(url)
       img = Image.open(toimg(imgdata.content))
       fileName = randomStr(24)
@@ -225,7 +370,7 @@ async def flipvert(ctx):
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
       file.close() # close file to prevent memory leak
       os.remove("./temp/img/"+fileName+"vflipped.png") # remove file
-    elif url.endswith(".gif"):
+    elif url.lower().endswith(".gif"):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       frames = []
       imgdata = requests.get(url) # get the image
@@ -255,7 +400,7 @@ async def flipvert(ctx):
 async def grayscale(ctx):
   if len(ctx.message.attachments) >= 1: # if 1 image is attached
     url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-    if url.endswith(".png") or url.endswith(".jpg"):
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
       imgdata = requests.get(url)
       img = Image.open(toimg(imgdata.content))
       fileName = randomStr(24)
@@ -267,7 +412,7 @@ async def grayscale(ctx):
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
       file.close() # close file to prevent memory leak
       os.remove("./temp/img/"+fileName+"grayscale.png") # remove file
-    elif url.endswith(".gif"):
+    elif url.lower().endswith(".gif"):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       frames = []
       imgdata = requests.get(url) # get the image
@@ -306,7 +451,7 @@ async def jpegify(ctx, quality=None):
     quality = int(quality) # convert the quality (idk if this is needed)
     if ctx.message.attachments != []: # if an attachment is attached
       url = ctx.message.attachments[0].url # only get the first one
-      if url.endswith(".png") or url.endswith(".jpg"): #if it is a png, jpg or gif
+      if url.lower().endswith(".png") or url.lower().endswith(".jpg"): #if it is a png, jpg or gif
         imgdata = requests.get(url) # get the image data
         img = Image.open(toimg(imgdata.content)) # make a new PIL image
         fileName = randomStr(24) # make a random string 24 characters long
@@ -316,7 +461,7 @@ async def jpegify(ctx, quality=None):
         await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.jpg")) # send the image
         file.close() # stop using the image to prevent memory leak
         os.remove("./temp/img/"+fileName+"jpgified.jpg") # delete it
-      elif url.endswith(".gif"):
+      elif url.lower().endswith(".gif"):
         message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
         frames = []
         imgdata = requests.get(url) # get the image
@@ -347,6 +492,64 @@ async def jpegify(ctx, quality=None):
     else: # if no attachment is attached
       await ctx.send("This command requires an image!") # notify the user
 
+#uncaption
+@bot.command()
+async def uncaption(ctx):
+  if len(ctx.message.attachments) >= 1: # if 1 image is attached
+    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
+      imgdata = requests.get(url)
+      img = Image.open(toimg(imgdata.content))
+      fileName = randomStr(24)
+      img = img.convert("RGBA")
+      wid, hgt = img.size
+      cutY = 0
+      for y in range(hgt):
+        if cutY == 0:
+          pixel = img.getpixel((0, y))
+          if pixel[0] != 255 and pixel[1] != 255 and pixel[2] != 255:
+            cutY = y
+      img = img.crop((0, cutY, wid, hgt))
+      img = img.convert("RGBA")
+      img.save("./temp/img/"+fileName+"uncaption.png") # save to use
+      file = open("./temp/img/"+fileName+"uncaption.png", "rb", buffering = 0) #open file
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
+      file.close() # close file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"uncaption.png") # remove file
+    elif url.lower().endswith(".gif"):
+      message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
+      frames = []
+      imgdata = requests.get(url) # get the image
+      img = Image.open(toimg(imgdata.content))
+      cutY = -1
+      for frame in ImageSequence.Iterator(img):
+        imgt = frame.convert("RGBA")
+        wid, hgt = imgt.size
+        if cutY == -1:
+          for y in range(hgt):
+            if cutY == -1:
+              pixel = imgt.getpixel((0, y))
+              if pixel[0] < 240 and pixel[1] < 240 and pixel[2] < 240:
+                cutY = y
+        imgt = imgt.crop((0, cutY, wid, hgt))
+        imgt = imgt.convert("RGBA")
+        byteIO = toimg()
+        frame.save(byteIO, format="GIF")
+        frame = Image.open(byteIO)
+        frames.append(imgt)
+      fileName = randomStr(24) #zzzzzzzzzzzz
+      byteIO = toimg()
+      frames[0].save("./temp/img/"+fileName+"uncaption.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      file = open("./temp/img/"+fileName+"uncaption.gif", "rb", buffering = 0)
+      await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
+      await message.delete() # delete the edited message
+      file.close() # stop using the caption file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"uncaption.gif") # delete the caption file
+    else:
+      await ctx.send("Your image must be a PNG, JPG, or GIF image.")
+  else:
+    await ctx.send("This command requires an image!")
 #brainfuck
 @bot.command()
 async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++>-]>++++++[<+++++>-]>+++++++++++++++[<+++++++>-]<<<<--.>+.>++.>.<<-.++.+++++.-.>.>--.++.<<++.>>----.<<--------.>+."):
@@ -373,7 +576,6 @@ async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++
     if active == True:
       ind += 1
       cmd = code[ind-1]
-      print(cmd)
       if cmd == ">":
         pointer += 1
       elif cmd == "<":
@@ -399,7 +601,7 @@ async def brainfrick(ctx, code=">++++++++[<++++++++++>-]>+++++++++++[<++++++++++
             loopChars.pop(inLoop)
             inLoop = inLoop - 1
         else:
-          await ctx.send("Error! (Mismatched parenthesis!)");
+          await ctx.send("Error! (Mismatched parenthesis!)")
           active = False
       elif cmd == ".":
         output = output + str(chr(buffer[pointer]))
@@ -437,17 +639,17 @@ async def eval(ctx):
   embed = discord.Embed(title="Lorem Ipsum", color=discord.Color(16777215))
   if ctx.author.id == 353911350545612801:
     try:
-      output = await eval(code)
+      output = exec(code)
       embed.color = discord.Color(196607)
-      embed.add_field(name="Input:", value="""```py\n"""+code+"```")
-      embed.add_field(name="Output:", value="```"+output+"```")
+      embed.add_field(name="Input:", value="""```py\n"""+str(code)+"```")
+      embed.add_field(name="Output:", value="```"+str(output)+"```")
       embed.title = "Code ran fine!"
-      await ctx.send(embed=embed)
+      await ctx.reply(embed=embed)
     except Exception as error:
       embed.title = "Error!"
       embed.color = discord.Color(8388608)
       embed.add_field(name="Error:", value="""```diff\n- """+str(error)+"```")
-      await ctx.send(embed=embed)
+      await ctx.reply(embed=embed)
   else:
     await ctx.send("Only the bot developer can run this command!")
 #caption img command
@@ -456,7 +658,7 @@ async def eval(ctx):
 async def caption(ctx, caption):
   if ctx.message.attachments != []: #if an attachment is attached
     url = ctx.message.attachments[0].url #only get the first one blah blah blah you know the drill
-    if url.endswith(".png") or url.endswith(".jpg"):
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       imgdata = requests.get(url) # get the image
       fileName = randomStr(24) #zzzzzzzzzzzz
@@ -483,7 +685,7 @@ async def caption(ctx, caption):
       await message.delete() # delete the edited message
       file.close() # stop using the caption file to prevent memory leak
       os.remove("./temp/img/"+fileName+"caption.png") # delete the caption file
-    elif url.endswith(".gif"):
+    elif url.lower().endswith(".gif"):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       frames = []
       imgdata = requests.get(url) # get the image
@@ -559,7 +761,7 @@ async def pixel(ctx, scalewid=None, scalehgt=None, scalemode=None):
           await ctx.send("Scale factor must be more than 1") #notify user
         else: # if they are proper
           url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-          if url.endswith(".png") or url.endswith(".jpg"):
+          if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
             imgdata = requests.get(url)
             img = Image.open(toimg(imgdata.content))
             fileName = randomStr(24)
@@ -575,7 +777,7 @@ async def pixel(ctx, scalewid=None, scalehgt=None, scalemode=None):
             await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
             file.close() # close file to prevent memory leak
             os.remove("./temp/img/"+fileName+"pixel.png") # remove file
-          elif url.endswith(".gif"):
+          elif url.lower().endswith(".gif"):
             message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
             frames = []
             imgdata = requests.get(url) # get the image
@@ -620,7 +822,7 @@ async def lightdark(ctx, scalemode=None):
   if len(ctx.message.attachments) == 2: # if 2 images are attached
     url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
     urltwo = ctx.message.attachments[1].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-    if url.endswith(".png") or url.endswith(".jpg") or urltwo.endswith(".png") or urltwo.endswith(".jpg") or url.endswith(".gif") or urltwo.endswith(".gif"):
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg") or urltwo.lower().endswith(".png") or urltwo.lower().endswith(".jpg") or url.lower().endswith(".gif") or urltwo.lower().endswith(".gif"):
       imgdata = requests.get(url)
       img = Image.open(toimg(imgdata.content))
       imgdatatwo = requests.get(urltwo)
@@ -660,10 +862,8 @@ async def lightdark(ctx, scalemode=None):
 @bot.command()
 async def avatar(ctx):
   try:
-    idtoget = ctx.message.content.split("@")[1].split(">")[0]
-    idtoget = idtoget.split("!")[1] if idtoget.split("!")[1] != idtoget else idtoget
+    idtoget = str(ctx.message.mentions[0].id)
     user = await ctx.message.guild.fetch_member(idtoget)
-    print(idtoget)
     print(user)
     avatar = "https://cdn.discordapp.com/avatars/"+idtoget+"/"+str(user.avatar)+".webp?size=4096" # get user avatar url in 256p
     await ctx.send(user.name+"'s avatar!")
@@ -686,6 +886,7 @@ async def color(ctx, hexcode=None):
     await ctx.send("Not a valid hex code!")
 #help command
 helpdef = {"avatar":"Gets a user's avatar. (Arguments: {User (mention)})",
+  "noise":"Gives random noise. Defaults to 200x150 colored image. (Arguments: (Grayscale), (Width), (Height))",
   "color":"Gives an image representing the color inputted. (Arguments: {Hex code})",
   "pixel":"Requires an image. Lowers the resolution of an image and scales it back up (Arguments: [Scale X factor, Scale Y factor, Scaling algorithm (0 - Nearest, 1 - Bilinear)])",
   "echo":"Make the bot say anything! (Arguments: {Message})",
@@ -696,11 +897,13 @@ helpdef = {"avatar":"Gets a user's avatar. (Arguments: {User (mention)})",
   "lightdark":"Requires two images. Mixes two images together to make one that changes with your theme! The first image will appear in the dark theme, and the second one will appear in the light theme!(Arguments: [Scaling algorithm])",
   "ping":"Gets your ping to the bot",
   "eval":"This command can only be ran by the bot developer.",
+  "afk":"Makes you AFK.",
   "invert":"Requires an image. Inverts an image.",
   "flip":"Requires an image. Flips an image horizontally.",
   "flipvert":"Requires an image. Flips an image vertically.",   
   "duck":"A Hello world Duck interpreter (Arguments: {Code})",
   "wave":"Requires an image. Makes an image wavy!",
+  "uncaption":"Requires an image. Removes the caption from an image if it finds one.",
   "tictactoe":"Tic tac toe! (Arguments: {User (mention)})",
   "grayscale":"Requires an image. Grayscales an image.",
   "endmatch":"Ends a tic tac toe match",
@@ -723,6 +926,7 @@ async def help(ctx, page=1):
   for cmd in range((page-1)*10, min(cmds, (page*10))): # for each command
     send += "`g!"+str(cmdstable[cmd])+"`" + " - " + str(helpdef.get(str(cmdstable[cmd])))+'''\n''' # add it in send string
   embed.add_field(name="Page "+str(page), value=send) # add the send string to the embed
+  embed.add_field(name="Vote for GBot!", value="[Vote for GBot!](https://top.gg/bot/907439983579758632/vote)", inline=False)
   embed.set_footer(text="Send g!help "+str(page+1)+" for the next page")
   #buttonprevpage = discord.ui.Button(label="prev page", custom_id="prev")
   
@@ -827,50 +1031,40 @@ def checkWin(board):
   return False # function ends on return, if it didnt end we know none of this stuff is true
   
 @bot.command()
-async def tictactoe(ctx, opponent=None):
+async def tictactoe(ctx):
+  opponent = ctx.message.mentions[0]
   if opponent == None:
     await ctx.send("You must mention an opponent!")
   elif ctx.author.id in boards:
     await ctx.send("You're already in a game! Use g!endmatch to leave your game!")
+  elif str(opponent.id) in boards:
+    await ctx.send(opponent.name + " is already in a game! Wait for them to finish before you play with them!")
   else:
-    opponentid = opponent.split("@")[1].split(">")[0]
-    if opponentid.split("!") != opponentid:
-      opponentid = opponentid[1:len(opponentid)+1]
-    if int(opponentid) == int(ctx.author.id):
-      await ctx.send("You cant start a game with yourself!")
-    elif opponentid in boards:
-      await ctx.send("Opponent is already in a game!")
-    else:
-      opponent = await ctx.message.guild.fetch_member(opponentid)
-      boards[int(ctx.author.id)] = {"opponent":opponentid,"board":["000","000","000"],"secondaryPlr":False,"turn":0}
-      boards[int(opponentid)] = {"opponent":ctx.author.id,"secondaryPlr":True,"turn":0}
-      
-      msg = await ctx.send(embed=makeEmbed(boards[ctx.author.id]))
-      boards[int(ctx.author.id)]["message"] = msg
+    opponentid = str(opponent.id)
+    boards[int(ctx.author.id)] = {"opponent":opponentid,"board":["000","000","000"],"secondaryPlr":False,"turn":0}
+    boards[int(opponentid)] = {"opponent":ctx.author.id,"secondaryPlr":True,"turn":0}
+    
+    msg = await ctx.send(embed=makeEmbed(boards[ctx.author.id]))
+    boards[int(ctx.author.id)]["message"] = msg
 
-#filter-chat in 3dg's discord
-def filter(message): #filter
-  retstr = "" #return string
-  for b in range(len(message)): # for message length
-    if message[b] != " ": # if letter is not a space
-      retstr += '#' # replace it with a hashtag and add it to string
-    else: # if not
-      retstr += message[b] # add it to string
-  return retstr #return the string
 @bot.event
 async def on_message(ctx):
-  filterchannelid = 0 # paste your filter channel id here
-  if ctx.channel.id == filterchannelid and ctx.author.bot == False: # if message is in filter channel and author isnt a bot (to prevent webhook spam)
-    url = "" #put your filter webhook url here
-    avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256" # get user avatar url in 256p
-    data = {"username":ctx.author.name,"avatar_url":avatar,"content":filter(ctx.content),"embeds":None} # data to send to the webhook
-    response = req.post(url, data=data) # send it to the webhook
-    await ctx.delete() # delete the message
-  if ctx.channel.id == 0: # guilded discord chat
-    url = "" #put your guilded webhook url here
-    avatar = "https://cdn.discordapp.com/avatars/"+str(ctx.author.id)+"/"+str(ctx.author.avatar)+".webp?size=256" # get user avatar url in 256p
-    data = {"username":ctx.author.name,"avatar_url":avatar,"content":ctx.author.name + ": " +ctx.content,"attachments":ctx.attachments,"embeds":None} # data to send to the webhook
-    response = req.post(url, data=data) # send it to the webhook
+  for mention in ctx.mentions:
+    cur.execute("SELECT `id` FROM `users` WHERE id = "+str(mention.id)+" AND server = "+str(ctx.guild.id))
+    if len(cur.fetchall()) != 0:
+      await ctx.reply(mention.name + " is currently AFK!")
+  if ctx.content[0:5] != "g!afk":
+    cur.execute("SELECT `id` FROM `users` WHERE id = "+str(ctx.author.id)+" AND server = "+str(ctx.guild.id))
+    if len(cur.fetchall()) != 0:
+      cur.execute("DELETE FROM `users` WHERE id="+str(ctx.author.id)+" AND server = "+ str(ctx.guild.id))
+      con.commit()
+      await ctx.reply(ctx.author.name + " is no longer AFK!")
+      try:
+        if len(ctx.author.name.split(" [AFK]")) == 1:
+          await ctx.author.edit(nick=ctx.author.name.split(" [AFK]")[0])
+      except:
+        print("No permission")
+  
   if int(ctx.author.id) in boards: # dogwater tictactoe code
     if len(ctx.content) == 2:
       if ctx.content[0] in "123" and ctx.content[1] in "123":
@@ -894,7 +1088,6 @@ async def on_message(ctx):
           board = boards[boards[int(ctx.author.id)]["opponent"]]["board"]
           oldStr = board[int(ctx.content[1])-1]
           string = ("2" if (ctx.content[0] == "1" and oldStr[0] == "0") else oldStr[0]) + ("2" if (ctx.content[0] == "2" and oldStr[1] == "0") else oldStr[1]) + ("2" if (ctx.content[0] == "3" and oldStr[2] == "0") else oldStr[2])
-          print(string,oldStr)
           if string != oldStr:
             boards[boards[int(ctx.author.id)]["opponent"]]["board"][int(ctx.content[1])-1] = string
             embed = makeEmbed(boards[boards[int(ctx.author.id)]["opponent"]], checkWin(board))
@@ -908,5 +1101,16 @@ async def on_message(ctx):
           else:
             await ctx.reply("That spot is already taken!")
   await bot.process_commands(ctx) # process commands again so bot doesnt break
-  
+
+@bot.event
+async def on_command_error(ctx, error):
+    try:
+        if type(error) == discord.ext.commands.errors.CommandNotFound:
+            await ctx.send("This command does not exist! Please use `g!help` for a list of avaliable commands.")
+        else:
+            await ctx.send(error)
+    except Exception as err:
+        print(err)
+        print(str(ctx.guild.name) + """\n""" + str(ctx.guild.id))
+        await ctx.author.send("I seem to be missing permissions for this server: `"+ctx.guild.name+"`. Have you enabled \"Administrator\" under GBot's role in Permissions?")
 bot.run(token)#run the bot
