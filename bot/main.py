@@ -21,10 +21,22 @@ file = open("./keys.json", "rb", buffering = 0)
 jsonstr = str(file.readlines()[0])
 jsonstr = json.loads(jsonstr[2:len(jsonstr)-1])
 token = jsonstr["token"] # discord token
-prefix = jsonstr["prefix"] # bot prefix
+#cur.execute("CREATE TABLE settings (servid varchar(48), prefix varchar(20))")
+#cur.execute("CREATE TABLE users (id varchar(48), server varchar(48))")
+con.commit()
+async def bprefix(bot, msg):
+  server = msg.guild
+  if server:
+    cur.execute("SELECT * FROM settings WHERE `servid` = '"+str(server.id)+"'")
+    try:
+      return cur.fetchall()[0][1]
+    except:
+      return "g!"
+  else:
+    return "g!"
 appid = 907439983579758632 # app id
-activity = discord.Activity(type=discord.ActivityType.watching, name="you (Prefix: "+prefix+")")
-bot = commands.Bot(command_prefix=prefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
+activity = discord.Activity(type=discord.ActivityType.watching, name="you")
+bot = commands.Bot(command_prefix=bprefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
 versionnum = 0.9 # version number
 revision = 2 # revision number
 def hex_format(color):
@@ -60,12 +72,12 @@ def get_avg_fps(PIL_Image_object):
     return None
 # stolen stackoverflow code but modified :scream:
 
-#AFK COMMAND!!! first command utilizing a database!
+#AFK COMMAND!!! first commandu tilizing a database!
 @bot.command()
 async def afk(ctx):
   cur.execute("SELECT `id` FROM `users` WHERE id = "+str(ctx.author.id)+" AND server = "+str(ctx.guild.id))
   if len(cur.fetchall()) == 0:
-    cur.execute("INSERT INTO `users`(`id`, `server`) VALUES (" + str(ctx.author.id) + ", "+ str(ctx.guild.id) +")")
+    cur.execute("INSERT INTO `users`(`servid`, `server`) VALUES (" + str(ctx.author.id) + ", "+ str(ctx.guild.id) +")")
     con.commit()
     await ctx.send(ctx.author.name + " is now AFK!")
     try:
@@ -82,6 +94,22 @@ async def afk(ctx):
     except:
       print("No permission")
 
+def escapestr(string):
+  return string.replace("\\", "\\\\").replace('"', '\"').replace("'", "\'").replace("`", "\`")
+#change prefix
+@bot.command()
+async def prefix(ctx, prefix):
+  cur.execute("SELECT * FROM settings WHERE servid = '"+str(ctx.guild.id)+"'")
+  if len(prefix) >= 1 and len(prefix) <= 20:
+    if len(cur.fetchall()) == 0:
+      cur.execute("INSERT INTO `settings`(`servid`, `prefix`) VALUES ('"+str(ctx.guild.id)+"', '"+escapestr(prefix)+"')")
+      con.commit()
+    else:
+      cur.execute("UPDATE settings SET `servid`='"+str(ctx.guild.id)+"', `prefix`='"+escapestr(prefix)+"' WHERE servid = '"+str(ctx.guild.id)+"'")
+      con.commit()
+    await ctx.send("Prefix has changed to: "+prefix)
+  else:
+    await ctx.send("Your prefix must be in between 1 and 20 characters!")
 #overlay command
 @bot.command()
 async def overlay(ctx, mode=0):
@@ -635,7 +663,7 @@ async def info(ctx):
 @bot.command()
 async def eval(ctx):
   msg = ctx.message.content
-  code = msg[(len(prefix)+5):(len(msg)+1)]
+  code = msg[(len(bprefix(bot, ctx))+5):(len(msg)+1)]
   embed = discord.Embed(title="Lorem Ipsum", color=discord.Color(16777215))
   if ctx.author.id == 353911350545612801:
     try:
@@ -899,6 +927,7 @@ helpdef = {"avatar":"Gets a user's avatar. (Arguments: {User (mention)})",
   "eval":"This command can only be ran by the bot developer.",
   "afk":"Makes you AFK.",
   "invert":"Requires an image. Inverts an image.",
+  "prefix":"Changes the prefix of the bot. (Arguments: {Prefix})",
   "flip":"Requires an image. Flips an image horizontally.",
   "flipvert":"Requires an image. Flips an image vertically.",   
   "duck":"A Hello world Duck interpreter (Arguments: {Code})",
@@ -920,13 +949,17 @@ async def help(ctx, page=1):
   cmds = len(bot.commands)
   cmdstable = []
   cmdValue = 0
-  for cmd in bot.commands:
+  cmdssort = [str(p) for p in bot.commands]
+  cmdssort = sorted(cmdssort)
+  for cmd in cmdssort:
     cmdstable.append(cmd)
     cmdValue += 1
   for cmd in range((page-1)*10, min(cmds, (page*10))): # for each command
     send += "`g!"+str(cmdstable[cmd])+"`" + " - " + str(helpdef.get(str(cmdstable[cmd])))+'''\n''' # add it in send string
   embed.add_field(name="Page "+str(page), value=send) # add the send string to the embed
-  embed.add_field(name="Vote for GBot!", value="[Vote for GBot!](https://top.gg/bot/907439983579758632/vote)", inline=False)
+  embed.add_field(name="Vote for GBot!",
+                  value="""[Top.gg](https://top.gg/bot/907439983579758632/vote)\n[Vibeslist.cf](https://vibeslist.cf/bot/907439983579758632/vote)"""
+                  , inline=False)
   embed.set_footer(text="Send g!help "+str(page+1)+" for the next page")
   #buttonprevpage = discord.ui.Button(label="prev page", custom_id="prev")
   
@@ -936,7 +969,7 @@ async def help(ctx, page=1):
 #echo command
 @bot.command()
 async def echo(ctx): # echo command ok this should be simple
-  await ctx.send("``"+str(ctx.message.content)[(5 + len(prefix)) : len(str(ctx.message.content))].replace("`", "'")+"``") # slice the first 5 + prefix length characters off the message and send it
+  await ctx.send("``"+str(ctx.message.content)[(5 + len(await bprefix(bot, ctx.message))) : len(str(ctx.message.content))].replace("`", "'")+"``") # slice the first 5 + prefix length characters off the message and send it
   await ctx.message.delete() # delete the message
 
 ################################
