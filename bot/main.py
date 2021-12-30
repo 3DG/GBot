@@ -5,8 +5,10 @@ import discord
 import requests as req
 import time as clock
 import os
+import asyncio
 import math
 import random
+import threading
 import requests
 import textwrap
 import json
@@ -14,31 +16,59 @@ from statistics import mean
 from io import BytesIO as toimg
 from PIL import Image, ImageFont, ImageDraw, ImageOps, ImageSequence
 from time import mktime
-from discord.ext import commands
-con = sqlite3.connect("gBotData.db")
-cur = con.cursor()
-file = open("./keys.json", "rb", buffering = 0)
-jsonstr = str(file.readlines()[0])
-jsonstr = json.loads(jsonstr[2:len(jsonstr)-1])
-token = jsonstr["token"] # discord token
+from discord.ext import commands, tasks
+from discord.ext.tasks import loop
+con = sqlite3.connect("gBotData.db") # get database
+cur = con.cursor() # get cursor
+file = open("./keys.json", "rb", buffering = 0) # open keys
+jsonstr = str(file.readlines()[0]) # get first line (json has no line breaks)
+jsonstr = json.loads(jsonstr[2:len(jsonstr)-1]) # parse json
+token = jsonstr["token"] # use discord token
 #cur.execute("CREATE TABLE settings (servid varchar(48), prefix varchar(20))")
-#cur.execute("CREATE TABLE users (id varchar(48), server varchar(48))")
-con.commit()
-async def bprefix(bot, msg):
-  server = msg.guild
-  if server:
-    cur.execute("SELECT * FROM settings WHERE `servid` = '"+str(server.id)+"'")
-    try:
-      return cur.fetchall()[0][1]
+#cur.execute("CREATE TABLE users (id varchar(48), servid varchar(48))")
+#con.commit()
+async def bprefix(bot, msg): # get prefix
+  server = msg.guild # get guild from message
+  if server: # if it isn't null
+    cur.execute("SELECT prefix FROM settings WHERE `servid` = '"+str(server.id)+"'") # get prefix from database where server id is the same as the server the message was sent in
+    try: # if it errors it can just fallback to g!
+      return cur.fetchall()[0] # return first index of the query which should always be the prefix for the server
     except:
-      return "g!"
+      return "g!" # return g! on failure
   else:
-    return "g!"
+    return "g!" # return g! if server is null
 appid = 907439983579758632 # app id
 activity = discord.Activity(type=discord.ActivityType.watching, name="you")
-bot = commands.Bot(command_prefix=bprefix,activity=activity,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
-versionnum = 0.9 # version number
-revision = 2 # revision number
+bot = commands.Bot(command_prefix=bprefix,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
+versionnum = 1.0 # version number
+revision = 0 # revision number
+activitythings = [
+  discord.Activity(type=discord.ActivityType.watching, name="%SERVERS% servers"),
+  discord.Game(name="some game idk"),
+  discord.Activity(type=discord.ActivityType.watching, name="how to be funny"),
+  discord.Activity(type=discord.ActivityType.listening, name="the matrix"),
+  discord.Game(name="g!help. I don't know how I'm playing a command either."),
+  discord.Activity(type=5, name="the trolling competition")
+]
+a=0
+@loop(seconds=15)
+async def updateActivity():
+  global a
+  a += 1
+  a = a%len(activitythings)
+  activity = activitythings[a]
+  activity.name = activity.name.replace("%SERVERS%", str(len(bot.guilds)))
+  await bot.change_presence(status=discord.Status.online, activity=activity)
+def coolFunc():
+  asyncio.run(loop())
+async def loop():
+  threading.Timer(10, coolFunc).start()
+  await updateActivity()
+
+@bot.event
+async def on_ready():
+  await loop()
+  #bot.loop.create_task(updateActivity())
 def hex_format(color):
   try:
     return (int(color[0:2], 16),int(color[2:4], 16),int(color[4:6], 16), int(color[6:8], 16) if (len(color) > 7) else 255)
@@ -75,9 +105,9 @@ def get_avg_fps(PIL_Image_object):
 #AFK COMMAND!!! first commandu tilizing a database!
 @bot.command()
 async def afk(ctx):
-  cur.execute("SELECT `id` FROM `users` WHERE id = "+str(ctx.author.id)+" AND server = "+str(ctx.guild.id))
+  cur.execute("SELECT `id` FROM `users` WHERE id = "+str(ctx.author.id)+" AND servid = "+str(ctx.guild.id))
   if len(cur.fetchall()) == 0:
-    cur.execute("INSERT INTO `users`(`servid`, `server`) VALUES (" + str(ctx.author.id) + ", "+ str(ctx.guild.id) +")")
+    cur.execute("INSERT INTO `users`(`id`, `servid`) VALUES (" + str(ctx.author.id) + ", "+ str(ctx.guild.id) +")")
     con.commit()
     await ctx.send(ctx.author.name + " is now AFK!")
     try:
@@ -85,7 +115,7 @@ async def afk(ctx):
     except:
       print("No permission")
   else:
-    cur.execute("DELETE FROM `users` WHERE id="+str(ctx.author.id)+" AND server = "+ str(ctx.guild.id))
+    cur.execute("DELETE FROM `users` WHERE id="+str(ctx.author.id)+" AND servid = "+ str(ctx.guild.id))
     con.commit()
     await ctx.send(ctx.author.name + " is no longer AFK!")
     try:
@@ -98,6 +128,7 @@ def escapestr(string):
   return string.replace("\\", "\\\\").replace('"', '\"').replace("'", "\'").replace("`", "\`")
 #change prefix
 @bot.command()
+@commands.has_permissions(administrator=True)
 async def prefix(ctx, prefix):
   cur.execute("SELECT * FROM settings WHERE servid = '"+str(ctx.guild.id)+"'")
   if len(prefix) >= 1 and len(prefix) <= 20:
@@ -319,6 +350,71 @@ async def flip(ctx):
   else:
     await ctx.send("This command requires an image!")
 
+@bot.command()
+async def speed(ctx):
+  if len(ctx.message.attachments) >= 1: # if 1 image is attached
+    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+    if url.lower().endswith(".gif"):
+      message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
+      frames = []
+      a = 0
+      imgdata = requests.get(url) # get the image
+      img = Image.open(toimg(imgdata.content))
+      for frame in ImageSequence.Iterator(img):
+        a += 1
+        imgt = frame.convert("RGBA")
+        byteIO = toimg()
+        frame.save(byteIO, format="GIF")
+        frame = Image.open(byteIO)
+        if a%2 == 0:
+          frames.append(imgt)
+      fileName = randomStr(24) #zzzzzzzzzzzz
+      byteIO = toimg()
+      frames[0].save("./temp/img/"+fileName+"speed.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      file = open("./temp/img/"+fileName+"speed.gif", "rb", buffering = 0)
+      await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
+      await message.delete() # delete the edited message
+      file.close() # stop using the caption file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"speed.gif") # delete the caption file
+    else:
+      await ctx.send("Your image must be a GIF animation.")
+  else:
+    await ctx.send("This command requires an image!")
+
+@bot.command()
+async def slow(ctx):
+  if len(ctx.message.attachments) >= 1: # if 1 image is attached
+    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+    if url.lower().endswith(".gif"):
+      message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
+      frames = []
+      imgdata = requests.get(url) # get the image
+      img = Image.open(toimg(imgdata.content))
+      for frame in ImageSequence.Iterator(img):
+        imgt = frame.convert("RGBA")
+        byteIO = toimg()
+        frame.save(byteIO, format="GIF")
+        frame = Image.open(byteIO)
+        frames.append(imgt)
+        byteIO = toimg()
+        frame.save(byteIO, format="GIF")
+        frame = Image.open(byteIO)
+        frames.append(imgt)
+      fileName = randomStr(24) #zzzzzzzzzzzz
+      byteIO = toimg()
+      frames[0].save("./temp/img/"+fileName+"speed.gif", duration = (get_avg_fps(img)*2), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      file = open("./temp/img/"+fileName+"speed.gif", "rb", buffering = 0)
+      await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
+      await message.delete() # delete the edited message
+      file.close() # stop using the caption file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"speed.gif") # delete the caption file
+    else:
+      await ctx.send("Your image must be a GIF animation.")
+  else:
+    await ctx.send("This command requires an image!")
+
 #wave command
 @bot.command()
 async def wave(ctx, wavesize=None):
@@ -531,11 +627,15 @@ async def uncaption(ctx):
       fileName = randomStr(24)
       img = img.convert("RGBA")
       wid, hgt = img.size
-      cutY = 0
+      cutY = -1
+      allWhite = True
+      inText = False
+      canSet = True
       for y in range(hgt):
-        if cutY == 0:
+        if cutY == -1:
           pixel = img.getpixel((0, y))
-          if pixel[0] != 255 and pixel[1] != 255 and pixel[2] != 255:
+          if pixel[0] < 240 and pixel[1] < 240 and pixel[2] < 240:
+            print(y)
             cutY = y
       img = img.crop((0, cutY, wid, hgt))
       img = img.convert("RGBA")
@@ -702,10 +802,10 @@ async def caption(ctx, caption):
           caption += '''\n''' # add a line break
       imgdraw = ImageDraw.Draw(img) # make a new image that can be pasted
       texwid, texhgt = imgdraw.textsize(caption, font=usefont) # get how much space text will take up
-      captcanv = Image.new(img.mode, (wid, hgt+texhgt+6), (255, 255, 255)) # make a new canvas with the image height + the text height + a margin
-      captcanv.paste(img, (0, texhgt+6)) # paste the image sent into the canvas
+      captcanv = Image.new(img.mode, (wid, hgt+texhgt+21), (255, 255, 255)) # make a new canvas with the image height + the text height + a margin
+      captcanv.paste(img, (0, texhgt+21)) # paste the image sent into the canvas
       capt = ImageDraw.Draw(captcanv) # make a new image that text can be drawn on
-      capt.text(((wid/2), 0),str(caption),(0,0,0),font=usefont, align='center', anchor="ma") # draw the caption on the canvas image with central alignment
+      capt.text(((wid/2), 7),str(caption),(0,0,0),font=usefont, align='center', anchor="ma") # draw the caption on the canvas image with central alignment
       captcanv.save("./temp/img/"+fileName+"caption.png") # save it to the temporary file blah blah blah
       file = open("./temp/img/"+fileName+"caption.png", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
@@ -730,10 +830,10 @@ async def caption(ctx, caption):
             caption += '''\n''' # add a line break
         imgdraw = ImageDraw.Draw(framedraw) # make a new image that can be pasted
         texwid, texhgt = imgdraw.textsize(caption, font=usefont) # get how much space text will take up
-        captcanv = Image.new(framedraw.mode, (wid, hgt+texhgt+6), (255, 255, 255)) # make a new canvas with the image height + the text height + a margin
-        captcanv.paste(framedraw, (0, texhgt+6)) # paste the image sent into the canvas
+        captcanv = Image.new(framedraw.mode, (wid, hgt+texhgt+21), (255, 255, 255)) # make a new canvas with the image height + the text height + a margin
+        captcanv.paste(framedraw, (0, texhgt+21)) # paste the image sent into the canvas
         capt = ImageDraw.Draw(captcanv) # make a new image that text can be drawn on
-        capt.text(((wid/2), 0),str(caption),(0,0,0),font=usefont, align='center', anchor="ma") # draw the caption on the canvas image with central alignment
+        capt.text(((wid/2), 7),str(caption),(0,0,0),font=usefont, align='center', anchor="ma") # draw the caption on the canvas image with central alignment
         byteIO = toimg()
         frame.save(byteIO, format="GIF")
         frame = Image.open(byteIO)
@@ -926,6 +1026,8 @@ helpdef = {"avatar":"Gets a user's avatar. (Arguments: {User (mention)})",
   "ping":"Gets your ping to the bot",
   "eval":"This command can only be ran by the bot developer.",
   "afk":"Makes you AFK.",
+  "speed":"Requires a GIF. Speeds up a GIF.",
+  "slow":"Requires a GIF. Slows down a GIF.",
   "invert":"Requires an image. Inverts an image.",
   "prefix":"Changes the prefix of the bot. (Arguments: {Prefix})",
   "flip":"Requires an image. Flips an image horizontally.",
@@ -954,17 +1056,20 @@ async def help(ctx, page=1):
   for cmd in cmdssort:
     cmdstable.append(cmd)
     cmdValue += 1
-  for cmd in range((page-1)*10, min(cmds, (page*10))): # for each command
-    send += "`g!"+str(cmdstable[cmd])+"`" + " - " + str(helpdef.get(str(cmdstable[cmd])))+'''\n''' # add it in send string
-  embed.add_field(name="Page "+str(page), value=send) # add the send string to the embed
-  embed.add_field(name="Vote for GBot!",
-                  value="""[Top.gg](https://top.gg/bot/907439983579758632/vote)\n[Vibeslist.cf](https://vibeslist.cf/bot/907439983579758632/vote)"""
-                  , inline=False)
-  embed.set_footer(text="Send g!help "+str(page+1)+" for the next page")
-  #buttonprevpage = discord.ui.Button(label="prev page", custom_id="prev")
-  
-  #buttonprevpage.coroutine = discord.Interaction(id=random.randint(0, 1000000000), type=discord.InteractionType("component"), application_id=appid)
-  await ctx.send(embed = embed) # send commands
+  if len(range((page-1)*10, min(cmds, (page*10)))) == 0:
+    await ctx.send("This page is invalid!")
+  else:
+    for cmd in range((page-1)*10, min(cmds, (page*10))): # for each command
+      send += "`g!"+str(cmdstable[cmd])+"`" + " - " + str(helpdef.get(str(cmdstable[cmd])))+'''\n''' # add it in send string
+    embed.add_field(name="Page "+str(page), value=send) # add the send string to the embed
+    embed.add_field(name="Vote for GBot!",
+                    value="""[Top.gg](https://top.gg/bot/907439983579758632/vote)\n[Vibeslist.cf](https://vibeslist.cf/bot/907439983579758632/vote)"""
+                    , inline=False)
+    embed.set_footer(text="Send g!help "+str(page+1)+" for the next page")
+    #buttonprevpage = discord.ui.Button(label="prev page", custom_id="prev")
+    
+    #buttonprevpage.coroutine = discord.Interaction(id=random.randint(0, 1000000000), type=discord.InteractionType("component"), application_id=appid)
+    await ctx.send(embed = embed) # send commands
 
 #echo command
 @bot.command()
@@ -1083,13 +1188,13 @@ async def tictactoe(ctx):
 @bot.event
 async def on_message(ctx):
   for mention in ctx.mentions:
-    cur.execute("SELECT `id` FROM `users` WHERE id = "+str(mention.id)+" AND server = "+str(ctx.guild.id))
+    cur.execute("SELECT `id` FROM `users` WHERE id = "+str(mention.id)+" AND servid = "+str(ctx.guild.id))
     if len(cur.fetchall()) != 0:
       await ctx.reply(mention.name + " is currently AFK!")
   if ctx.content[0:5] != "g!afk":
-    cur.execute("SELECT `id` FROM `users` WHERE id = "+str(ctx.author.id)+" AND server = "+str(ctx.guild.id))
+    cur.execute("SELECT `id` FROM `users` WHERE id = "+str(ctx.author.id)+" AND servid = "+str(ctx.guild.id))
     if len(cur.fetchall()) != 0:
-      cur.execute("DELETE FROM `users` WHERE id="+str(ctx.author.id)+" AND server = "+ str(ctx.guild.id))
+      cur.execute("DELETE FROM `users` WHERE id="+str(ctx.author.id)+" AND servid = "+ str(ctx.guild.id))
       con.commit()
       await ctx.reply(ctx.author.name + " is no longer AFK!")
       try:
