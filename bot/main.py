@@ -8,13 +8,14 @@ import os
 import asyncio
 import math
 import random
+import js2py
 import threading
 import requests
 import textwrap
 import json
 from statistics import mean
 from io import BytesIO as toimg
-from PIL import Image, ImageFont, ImageDraw, ImageOps, ImageSequence
+from PIL import Image, ImageFont, ImageDraw, ImageOps, ImageSequence, ImageFilter
 from time import mktime
 from discord.ext import commands, tasks
 from discord.ext.tasks import loop
@@ -32,26 +33,79 @@ async def bprefix(bot, msg): # get prefix
   if server: # if it isn't null
     cur.execute("SELECT prefix FROM settings WHERE `servid` = '"+str(server.id)+"'") # get prefix from database where server id is the same as the server the message was sent in
     try: # if it errors it can just fallback to g!
-      return cur.fetchall()[0] # return first index of the query which should always be the prefix for the server
+      return cur.fetchall()[0][0] # return first index of the query which should always be the prefix for the server
     except:
-      return "g!" # return g! on failure
+      return "g:" # return g! on failure
   else:
-    return "g!" # return g! if server is null
+    return "g:" # return g! if server is null
+
+async def getRecentImg(ctx):
+  msgs = await ctx.channel.history(limit=100).flatten()
+  attachments = []
+  for msg in msgs:
+    if msg.attachments != [] and msg.attachments[0] != None:
+      filename = msg.attachments[0].filename.lower()
+      if filename.endswith(".png") or filename.endswith(".jpg") or filename.endswith(".gif"):
+        attachments.append(msg.attachments[0])
+    else:
+      try:
+        if msg.content.split("https://")[1].split(" ")[0]:
+          print(1)
+      except:
+        if False:
+          print(0)
+  return attachments
+      
+def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
+  retstr = "" # make a blank string to return later
+  for i in range(length): #repeat length times
+    retstr += letters[random.randint(0, len(letters)-1)] #add a random letter from 0 to the amount of letters -1 to the return string
+  return retstr #return the return string
+
 appid = 907439983579758632 # app id
 activity = discord.Activity(type=discord.ActivityType.watching, name="you")
+
+discord.MemberCacheFlags.all()
+
 bot = commands.Bot(command_prefix=bprefix,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
-versionnum = 1.0 # version number
+bot.intents.members=True
+discord.Intents.members=True
+
+versionnum = 1.2 # version number
 revision = 0 # revision number
 activitythings = [
   discord.Activity(type=discord.ActivityType.watching, name="%SERVERS% servers"),
+  discord.Game(name="Type @GBot prefix for the server prefix"),
   discord.Game(name="some game idk"),
   discord.Activity(type=discord.ActivityType.watching, name="how to be funny"),
   discord.Activity(type=discord.ActivityType.listening, name="the matrix"),
-  discord.Game(name="g!help. I don't know how I'm playing a command either."),
-  discord.Activity(type=5, name="the trolling competition")
+  discord.Game(name="@GBot help"),
+  discord.Activity(type=5, name="the trolling competition"),
+  discord.Game(name="#RIPBOZO @esmBot")
 ]
 a=0
-@loop(seconds=15)
+memes = requests.get("https://api.reddit.com/r/memes/hot?limit=100")
+dankmemes = requests.get("https://api.reddit.com/r/dankmemes/hot?limit=100")
+headers = requests.utils.default_headers()
+async def updateMemes():
+  global memes
+  global dankmemes
+  global headers
+  headers.update(
+    {
+      'User-Agent': randomStr(50),
+    }
+  )
+  memes = requests.get("https://api.reddit.com/r/memes/hot?limit=100", headers=headers)
+  def updDank():
+    dankmemes = requests.get("https://api.reddit.com/r/dankmemes/hot?limit=100", headers=headers)
+  threading.Timer(300, updDank).start()
+def memeFunc():
+  asyncio.run(looptwo())
+async def looptwo():
+  threading.Timer(600, memeFunc).start()
+  await updateMemes()
+
 async def updateActivity():
   global a
   a += 1
@@ -62,23 +116,17 @@ async def updateActivity():
 def coolFunc():
   asyncio.run(loop())
 async def loop():
-  threading.Timer(10, coolFunc).start()
+  threading.Timer(15, coolFunc).start()
   await updateActivity()
 
 @bot.event
 async def on_ready():
   await loop()
-  #bot.loop.create_task(updateActivity())
 def hex_format(color):
   try:
     return (int(color[0:2], 16),int(color[2:4], 16),int(color[4:6], 16), int(color[6:8], 16) if (len(color) > 7) else 255)
   except:
     return "error"
-def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
-  retstr = "" # make a blank string to return later
-  for i in range(length): #repeat length times
-    retstr += letters[random.randint(0, len(letters)-1)] #add a random letter from 0 to the amount of letters -1 to the return string
-  return retstr #return the return string
 #ping command
 @bot.command() # this is a command
 async def ping(ctx): #ctx = context for message
@@ -102,7 +150,7 @@ def get_avg_fps(PIL_Image_object):
     return None
 # stolen stackoverflow code but modified :scream:
 
-#AFK COMMAND!!! first commandu tilizing a database!
+#AFK COMMAND!!! first command utilizing a database!
 @bot.command()
 async def afk(ctx):
   cur.execute("SELECT `id` FROM `users` WHERE id = "+str(ctx.author.id)+" AND servid = "+str(ctx.guild.id))
@@ -129,18 +177,21 @@ def escapestr(string):
 #change prefix
 @bot.command()
 @commands.has_permissions(administrator=True)
-async def prefix(ctx, prefix):
+async def prefix(ctx, prefix=None):
   cur.execute("SELECT * FROM settings WHERE servid = '"+str(ctx.guild.id)+"'")
-  if len(prefix) >= 1 and len(prefix) <= 20:
-    if len(cur.fetchall()) == 0:
-      cur.execute("INSERT INTO `settings`(`servid`, `prefix`) VALUES ('"+str(ctx.guild.id)+"', '"+escapestr(prefix)+"')")
-      con.commit()
-    else:
-      cur.execute("UPDATE settings SET `servid`='"+str(ctx.guild.id)+"', `prefix`='"+escapestr(prefix)+"' WHERE servid = '"+str(ctx.guild.id)+"'")
-      con.commit()
-    await ctx.send("Prefix has changed to: "+prefix)
+  if prefix == None:
+    await ctx.send("My prefix for this server is: "+[await bprefix(bot, ctx)][0])
   else:
-    await ctx.send("Your prefix must be in between 1 and 20 characters!")
+    if len(prefix) >= 1 and len(prefix) <= 20:
+      if len(cur.fetchall()) == 0:
+        cur.execute("INSERT INTO `settings`(`servid`, `prefix`) VALUES ('"+str(ctx.guild.id)+"', '"+escapestr(prefix)+"')")
+        con.commit()
+      else:
+        cur.execute("UPDATE settings SET `servid`='"+str(ctx.guild.id)+"', `prefix`='"+escapestr(prefix)+"' WHERE servid = '"+str(ctx.guild.id)+"'")
+        con.commit()
+      await ctx.send("Prefix has changed to: "+prefix)
+    else:
+      await ctx.send("Your prefix must be in between 1 and 20 characters!")
 #overlay command
 @bot.command()
 async def overlay(ctx, mode=0):
@@ -308,6 +359,48 @@ async def invert(ctx):
   else:
     await ctx.send("This command requires an image!")
 
+#welcome image
+@bot.command()
+async def welcome(ctx, user="self"):
+  m2 = await ctx.guild.fetch_members(limit=None).flatten()
+  imgbg = Image.open("./welcomeImgs/1.png")
+  bottag = Image.open("./BOTTAG.png")
+  mask = Image.open("./mask.png").convert("L")
+  user = ctx.message.mentions[0] if ctx.message.mentions != [] and user != "self" else ctx.author
+  avatar = requests.get("https://cdn.discordapp.com/avatars/"+str(user.id)+"/"+user.avatar+".png?size=128")
+  avatarimg = Image.open(toimg(avatar.content))
+  avatarimg = avatarimg.convert("RGBA")
+  avatarimg = avatarimg.resize((107, 107), resample=Image.BILINEAR)
+  wid, hgt = imgbg.size
+  img = Image.new("RGBA", (wid,hgt), (255, 255, 255, 0))
+  img.paste(imgbg, (0, 0))
+  img.paste(avatarimg, (17, 26), mask)
+  if user.bot == True:
+    img.paste(bottag, (132, 23))
+  usefont = ImageFont.truetype("ubuntu.ttf", 15) # get funny font
+  stringtoputinimg = textwrap.wrap("Welcome to "+ctx.guild.name, width=230)[0]
+  usefontname = ImageFont.truetype("ubuntu.ttf", 30) # get funny font
+  numberfont = ImageFont.truetype("ubuntu.ttf", 90) # get funny font
+  username = textwrap.wrap(user.name, width=180)[0]
+  stringtoputinimg += "..." if len(textwrap.wrap("Welcome to "+ctx.guild.name, width=250)) >= 2 else ""
+  imgdraw = ImageDraw.Draw(img) # make a new image that can be pasted
+  imgdraw.text((132, 92),stringtoputinimg,(255, 255, 255), font=usefont) # draw the caption on the canvas image with central alignment
+  imgdraw.text((132, 60),username,(255, 255, 255), font=usefontname) # draw the caption on the canvas image with central alignment
+  txtstuff = Image.new("RGBA", (600, 90), (255, 255, 255, 0))
+  txtdraw = ImageDraw.Draw(txtstuff)
+  txtdraw.text((0, 0),str(len(m2)),(255, 255, 255), font=numberfont) # draw the caption on the canvas image with central alignment
+  txtstuff = txtstuff.rotate(-22.5, expand=1)
+  txtstuff = txtstuff.resize((200, 100), resample=Image.BILINEAR)
+  img.paste(txtstuff, (315, 11), txtstuff)
+
+
+  
+  img.save("./a.png")
+  file = open("./a.png", "rb", buffering=0)
+  await ctx.send("Here is your image!", file=discord.File(file, filename="welcome.png")) # send the image
+  file.close()
+  
+
 #horiz flip command
 @bot.command()
 async def flip(ctx):
@@ -403,6 +496,36 @@ async def slow(ctx):
         frames.append(imgt)
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
+      frames[0].save("./temp/img/"+fileName+"speed.gif", duration = (get_avg_fps(img)*2), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      file = open("./temp/img/"+fileName+"speed.gif", "rb", buffering = 0)
+      await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
+      await message.delete() # delete the edited message
+      file.close() # stop using the caption file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"speed.gif") # delete the caption file
+    else:
+      await ctx.send("Your image must be a GIF animation.")
+  else:
+    await ctx.send("This command requires an image!")
+
+@bot.command()
+async def reverse(ctx):
+  if len(ctx.message.attachments) >= 1: # if 1 image is attached
+    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
+    if url.lower().endswith(".gif"):
+      message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
+      frames = []
+      imgdata = requests.get(url) # get the image
+      img = Image.open(toimg(imgdata.content))
+      for frame in ImageSequence.Iterator(img):
+        imgt = frame.convert("RGBA")
+        byteIO = toimg()
+        frame.save(byteIO, format="GIF")
+        frame = Image.open(byteIO)
+        frames.append(imgt)
+      fileName = randomStr(24) #zzzzzzzzzzzz
+      byteIO = toimg()
+      frames.reverse()
       frames[0].save("./temp/img/"+fileName+"speed.gif", duration = (get_avg_fps(img)*2), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
       file = open("./temp/img/"+fileName+"speed.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
@@ -763,7 +886,7 @@ async def info(ctx):
 @bot.command()
 async def eval(ctx):
   msg = ctx.message.content
-  code = msg[(len(bprefix(bot, ctx))+5):(len(msg)+1)]
+  code = msg[(len([await bprefix(bot, ctx)][0])+5):(len(msg)+1)]
   embed = discord.Embed(title="Lorem Ipsum", color=discord.Color(16777215))
   if ctx.author.id == 353911350545612801:
     try:
@@ -771,7 +894,7 @@ async def eval(ctx):
       embed.color = discord.Color(196607)
       embed.add_field(name="Input:", value="""```py\n"""+str(code)+"```")
       embed.add_field(name="Output:", value="```"+str(output)+"```")
-      embed.title = "Code ran fine!"
+      embed.title = "Eval succeeded!"
       await ctx.reply(embed=embed)
     except Exception as error:
       embed.title = "Error!"
@@ -784,8 +907,13 @@ async def eval(ctx):
     
 @bot.command()
 async def caption(ctx, caption):
-  if ctx.message.attachments != []: #if an attachment is attached
-    url = ctx.message.attachments[0].url #only get the first one blah blah blah you know the drill
+  attachment = None
+  if ctx.message.attachments == []: #if an attachment isnt attached
+    attachment = [await getRecentImg(ctx)][0][0] # get the most recent file sent
+  elif ctx.message.attachments[0] != None:
+    attachment = ctx.message.attachments[0]
+  if attachment != None: #if an attachment is attached
+    url = attachment.url #only get the first one blah blah blah you know the drill
     if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       imgdata = requests.get(url) # get the image
@@ -987,18 +1115,34 @@ async def lightdark(ctx, scalemode=None):
       await ctx.send("Your image must be a PNG, JPG, or GIF image.")
   else:
     await ctx.send("This command requires 2 images!")
+
+
+@bot.command()
+async def dice(ctx, sides=6, rolls=1):
+  if rolls != 1:
+    rollstable = []
+    for b in range(rolls):
+      rollstable.append(random.randint(1,sides));
+    await ctx.send(""":game_die: You have rolled:\n"""+str([num for num in rollstable])[1:len(str([num for num in rollstable]))-1])
+  elif rolls == 1:
+    await ctx.send(":game_die: You rolled a "+str(random.randint(1, sides))+"!")
+
+@bot.command(name="8ball")
+async def _8ball(ctx):
+  responses = ["It is certain.","It is decidedly so.","Without a doubt.","Yes definitely.","You may rely on it.","As I see it, yes.","Most likely.","Outlook good.","Yes.","Signs point to yes.","Reply hazy, try again.","Ask again later.","Better not tell you now.","Cannot predict now.","Concentrate and ask again.","Don't count on it.","My reply is no.","My sources say no.","Outlook not so good.","Very doubtful.",]
+  await ctx.send(":8ball: "+responses[random.randint(0,len(responses)-1)])
+
 @bot.command()
 async def avatar(ctx):
-  try:
-    idtoget = str(ctx.message.mentions[0].id)
+  idtoget = str(ctx.message.mentions[0].id) if ctx.message.mentions != [] else None
+  if idtoget != None:
     user = await ctx.message.guild.fetch_member(idtoget)
     print(user)
     avatar = "https://cdn.discordapp.com/avatars/"+idtoget+"/"+str(user.avatar)+".webp?size=4096" # get user avatar url in 256p
     await ctx.send(user.name+"'s avatar!")
     await ctx.send(avatar)
-  except Exception as err:
-    print(err)
-    await ctx.send("You must mention a user!")
+  else:
+    await ctx.send("You must mention someone!")
 @bot.command()
 async def color(ctx, hexcode=None):
   if hexcode == None:
@@ -1012,6 +1156,109 @@ async def color(ctx, hexcode=None):
     os.remove("./temp/img/"+name+"Color.png")
   else:
     await ctx.send("Not a valid hex code!")
+#@bot.slash_command(name="troll", description="trolls you")
+#async def trol(self, ctx):
+#  await ctx.send("troll")
+@bot.command()
+async def randommsg(ctx):
+  msg = await ctx.channel.history(limit=100).flatten()
+  getMsg = msg[random.randint(0, min(len(msg), 100)-1)]
+  embed = discord.Embed(title="Message from "+getMsg.channel.name)
+  msgcontent = getMsg.content if getMsg.content != "" and len(getMsg.content) <= 1024 else "No message content is avaliable."
+  embed.add_field(name = getMsg.author.name, value = msgcontent)
+  embed.set_thumbnail(url="https://cdn.discordapp.com/avatars/"+str(getMsg.author.id)+"/"+getMsg.author.avatar+".png?size=128")
+  embed.add_field(name="Jump to message", value="https://discord.com/channels/"+str(getMsg.guild.id)+"/"+str(getMsg.channel.id)+"/"+str(getMsg.id), inline = False)
+  if getMsg.attachments != [] and getMsg.attachments[0] != None:
+    embed.set_image(url=getMsg.attachments[0])
+  await ctx.send(embed = embed)
+@bot.command()
+async def dog(ctx):
+  try:
+    dog = requests.get("https://dog.ceo/api/breeds/image/random")
+    dogImg = json.loads(dog.content)["message"]
+    embed = discord.Embed(title="Woof! :dog:", color=discord.Color(7810338))
+    embed.set_image(url=dogImg)
+    await ctx.send(embed=embed)
+  except Exception as err:
+    print(err)
+    await ctx.send("We encountered an error while getting your picture of a dog. Sorry!")
+
+@bot.command()
+async def meme(ctx):
+  try:
+    memejson = json.loads(memes.content)
+    if "message" in memejson:
+      await ctx.send("You have to wait a while before you can run this command again.")
+    else:
+      memejson = memejson['data']['children']
+      memejson = memejson[random.randint(0,99)]['data']
+      embed = discord.Embed(title=memejson["title"], color=discord.Color(7810338))
+      embed.set_image(url=memejson["url"] if "url" in memejson else "https://www.redditstatic.com/reddit404b.png")
+      embed.add_field(name="Link to post", value="https://reddit.com"+memejson["permalink"])
+      embed.set_footer(text="Posted by u/"+memejson["author"]+" in r/memes.")
+      await ctx.send(embed=embed)
+  except Exception as err:
+    print(err)
+    await ctx.send(err)
+@bot.command()
+async def rps(ctx, choice=None):
+  choices = ["Rock", "Paper", "Scissors"]
+  winning = [["rock", "scissors"], ["scissors", "paper"], ["paper", "rock"]]
+  valid = False
+  win = False
+  for a in choices:
+    if a.lower() in choice.lower():
+      valid = True
+      choice = a
+  if valid:
+    botchoice = choices[random.randint(0,2)];
+    for winpattern in winning:
+      if botchoice.lower() == winpattern[0] and choice.lower() == winpattern[1]:
+        win = False
+      elif choice.lower() == winpattern[0] and botchoice.lower() == winpattern[1]:
+        win = True
+    await ctx.send("You chose **"+choice+"**, and I chose **"+botchoice+"""**.\n**"""+((choice if win == True else botchoice)+"** wins!" if choice != botchoice else "Tie!**"))
+  else:
+    await ctx.send("You need to choose either rock, paper, or scissors!")
+@bot.command()
+async def dankmeme(ctx):
+  try:
+    dankmemejson = json.loads(dankmemes.content)
+    if "message" in dankmemejson:
+      await ctx.send("You have to wait a while before you can run this command again.")
+    else:
+      dankmemejson = dankmemejson['data']['children']
+      dankmemejson = dankmemejson[random.randint(0,99)]['data']
+      embed = discord.Embed(title=dankmemejson["title"], color=discord.Color(7810338))
+      embed.set_image(url=dankmemejson["url"] if "url" in dankmemejson else "https://www.redditstatic.com/reddit404b.png")
+      embed.add_field(name="Link to post", value="https://reddit.com"+dankmemejson["permalink"])
+      embed.set_footer(text="Posted by u/"+dankmemejson["author"]+" in r/dankmemes.")
+      await ctx.send(embed=embed)
+  except Exception as err:
+    print(err)
+    await ctx.send(err)    
+
+@bot.command()
+async def dadjoke(ctx):
+  try:
+    djoke = requests.get("https://icanhazdadjoke.com/slack")
+    djokeTxt = json.loads(djoke.content)["attachments"][0]["text"]
+    await ctx.send(djokeTxt)
+  except Exception as err:
+    print(err)
+    await ctx.send("We encountered an error while getting your dad joke. Sorry!")
+
+@bot.command()
+async def cat(ctx):
+  try:
+    cat = requests.get("https://api.thecatapi.com/v1/images/search")
+    catImg = json.loads(cat.content)[0]["url"]
+    embed = discord.Embed(title="Meow! :cat:", color=discord.Color(16774925))
+    embed.set_image(url=catImg)
+    await ctx.send(embed=embed)
+  except Exception as err:
+    print(err)
+    await ctx.send("We encountered an error while getting your picture of a cat. Sorry!")
 #help command
 helpdef = {"avatar":"Gets a user's avatar. (Arguments: {User (mention)})",
   "noise":"Gives random noise. Defaults to 200x150 colored image. (Arguments: (Grayscale), (Width), (Height))",
@@ -1020,6 +1267,12 @@ helpdef = {"avatar":"Gets a user's avatar. (Arguments: {User (mention)})",
   "echo":"Make the bot say anything! (Arguments: {Message})",
   "caption":"Requires an image. Adds a caption to any image (Arguments: {Caption})",
   "info":"Sends information about the bot",
+  "dog":"Gets a random image of a dog.",
+  "cat":"Gets a random image of a cat.",
+  "dadjoke":"Gets a random dad joke.",
+  "meme":"Gets a random post out of the top 100 hottest posts from r/memes.",
+  "dankmeme":"Gets a random post out of the top 100 hottest posts from r/dankmemes",
+  "randommsg":"Gets a random message out of the 100 most recent messages.",
   "jpegify":"Requires an image. Returns a low quality jpg of the image sent (Arguments: [Quality])",
   "help":"Shows a list of commands",
   "lightdark":"Requires two images. Mixes two images together to make one that changes with your theme! The first image will appear in the dark theme, and the second one will appear in the light theme!(Arguments: [Scaling algorithm])",
@@ -1027,9 +1280,14 @@ helpdef = {"avatar":"Gets a user's avatar. (Arguments: {User (mention)})",
   "eval":"This command can only be ran by the bot developer.",
   "afk":"Makes you AFK.",
   "speed":"Requires a GIF. Speeds up a GIF.",
+  "8ball":"Picks a random response out of 20 preset ones.",
   "slow":"Requires a GIF. Slows down a GIF.",
+  "reverse":"Requires a GIF. Reverses a GIF.",
   "invert":"Requires an image. Inverts an image.",
   "prefix":"Changes the prefix of the bot. (Arguments: {Prefix})",
+  "dice":"Rolls a dice. (Arguments: (Sides), (Rolls))",
+  "overlay":"Requires 2 images. Overlays 2 images on top of eachother.",
+  "welcome":"Test command, will be removed later.",
   "flip":"Requires an image. Flips an image horizontally.",
   "flipvert":"Requires an image. Flips an image vertically.",   
   "duck":"A Hello world Duck interpreter (Arguments: {Code})",
@@ -1060,12 +1318,12 @@ async def help(ctx, page=1):
     await ctx.send("This page is invalid!")
   else:
     for cmd in range((page-1)*10, min(cmds, (page*10))): # for each command
-      send += "`g!"+str(cmdstable[cmd])+"`" + " - " + str(helpdef.get(str(cmdstable[cmd])))+'''\n''' # add it in send string
+      send += "`"+[await bprefix(bot, ctx)][0]+str(cmdstable[cmd])+"`" + " - " + str(helpdef.get(str(cmdstable[cmd])))+'''\n''' # add it in send string
     embed.add_field(name="Page "+str(page), value=send) # add the send string to the embed
     embed.add_field(name="Vote for GBot!",
-                    value="""[Top.gg](https://top.gg/bot/907439983579758632/vote)\n[Vibeslist.cf](https://vibeslist.cf/bot/907439983579758632/vote)"""
+                    value="""[Top.gg](https://top.gg/bot/907439983579758632/vote)\n[Vibeslist.cf](https://vibeslist.cf/bot/907439983579758632/vote)\n[Toplist.dev](https://toplist.dev/bot/907439983579758632/vote)"""
                     , inline=False)
-    embed.set_footer(text="Send g!help "+str(page+1)+" for the next page")
+    embed.set_footer(text="Send "+[await bprefix(bot, ctx)][0]+"help "+str(page+1)+" for the next page")
     #buttonprevpage = discord.ui.Button(label="prev page", custom_id="prev")
     
     #buttonprevpage.coroutine = discord.Interaction(id=random.randint(0, 1000000000), type=discord.InteractionType("component"), application_id=appid)
@@ -1074,7 +1332,7 @@ async def help(ctx, page=1):
 #echo command
 @bot.command()
 async def echo(ctx): # echo command ok this should be simple
-  await ctx.send("``"+str(ctx.message.content)[(5 + len(await bprefix(bot, ctx.message))) : len(str(ctx.message.content))].replace("`", "'")+"``") # slice the first 5 + prefix length characters off the message and send it
+  await ctx.send("``"+str(ctx.message.content)[5 + len([await bprefix(bot, ctx)][0]) : len(str(ctx.message.content))].replace("`", "'")+"``") # slice the first 5 + prefix length characters off the message and send it
   await ctx.message.delete() # delete the message
 
 ################################
@@ -1087,7 +1345,7 @@ async def endmatch(ctx):
     boards.pop(ctx.author.id)
     await ctx.send("Left match!")
   else:
-    await ctx.send("You are not in a match! To join one, use g!tictactoe and mention an opponent!")
+    await ctx.send("You are not in a match! To join one, use g:tictactoe and mention an opponent!")
 def makeEmbed(board, win=False):
   boardEmojis = [":black_large_square:", "<:tictactoe_x:918581530551533638>", "<:tictactoe_o:918581530543145040>"]
   boardTxt = ""
@@ -1098,7 +1356,7 @@ def makeEmbed(board, win=False):
       boardTxt += """\n"""
   embed = discord.Embed(title="Tic tac toe", color=discord.Color(1977406 if win == False else 65280 if win == "o" or win == "x" else 65535))
   embed.add_field(name = "To play, say a number for the horizontal position, next to a number for your vertical position." if win == False else "O wins!" if win == "o" else "X wins!" if win == "x" else "Tie!", value=boardTxt)
-  embed.set_footer(text = "To start your own game, type g!tictactoe and mention someone!")
+  embed.set_footer(text = "To start your own game, type g:tictactoe and mention someone!")
   return embed
 def checkWin(board):
   winpatterns = [
@@ -1170,7 +1428,7 @@ def checkWin(board):
   
 @bot.command()
 async def tictactoe(ctx):
-  opponent = ctx.message.mentions[0]
+  opponent = ctx.message.mentions[0] if ctx.message.mentions != [] else None
   if opponent == None:
     await ctx.send("You must mention an opponent!")
   elif ctx.author.id in boards:
@@ -1202,7 +1460,15 @@ async def on_message(ctx):
           await ctx.author.edit(nick=ctx.author.name.split(" [AFK]")[0])
       except:
         print("No permission")
-  
+  a = 0
+  try:
+    if ctx.mentions != [] and ctx.mentions[0].id == 907439983579758632:
+      if "prefix" in ctx.content:
+        await ctx.reply("My prefix for this server is \""+[await bprefix(bot, ctx)][0]+"\"")
+      elif "help" in ctx.content:
+        await help(ctx.channel)
+  finally:
+    a = 0
   if int(ctx.author.id) in boards: # dogwater tictactoe code
     if len(ctx.content) == 2:
       if ctx.content[0] in "123" and ctx.content[1] in "123":
@@ -1244,7 +1510,7 @@ async def on_message(ctx):
 async def on_command_error(ctx, error):
     try:
         if type(error) == discord.ext.commands.errors.CommandNotFound:
-            await ctx.send("This command does not exist! Please use `g!help` for a list of avaliable commands.")
+            await ctx.send("This command does not exist! Type `@GBot help` for a list of commands.")
         else:
             await ctx.send(error)
     except Exception as err:
