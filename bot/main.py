@@ -17,6 +17,8 @@ from statistics import mean
 from io import BytesIO as toimg
 from PIL import Image, ImageFont, ImageDraw, ImageOps, ImageSequence, ImageFilter
 from time import mktime
+import datetime
+from discord.ui import Button, View
 from discord.ext import commands, tasks
 from discord.ext.tasks import loop
 con = sqlite3.connect("gBotData.db") # get database
@@ -25,8 +27,10 @@ file = open("./keys.json", "rb", buffering = 0) # open keys
 jsonstr = str(file.readlines()[0]) # get first line (json has no line breaks)
 jsonstr = json.loads(jsonstr[2:len(jsonstr)-1]) # parse json
 token = jsonstr["token"] # use discord token
+tenorKey = jsonstr["tenor"]
 #cur.execute("CREATE TABLE settings (servid varchar(48), prefix varchar(20))")
 #cur.execute("CREATE TABLE users (id varchar(48), servid varchar(48))")
+#cur.execute("CREATE TABLE punishments (id varchar(48), servid varchar(48), warnedsince varchar(48), bannedsince varchar(48), warns varchar(1024) )")
 #con.commit()
 async def bprefix(bot, msg): # get prefix
   server = msg.guild # get guild from message
@@ -38,22 +42,45 @@ async def bprefix(bot, msg): # get prefix
       return "g:" # return g! on failure
   else:
     return "g:" # return g! if server is null
-
 async def getRecentImg(ctx):
-  msgs = await ctx.channel.history(limit=100).flatten()
-  attachments = []
-  for msg in msgs:
-    if msg.attachments != [] and msg.attachments[0] != None:
-      filename = msg.attachments[0].filename.lower()
-      if filename.endswith(".png") or filename.endswith(".jpg") or filename.endswith(".gif"):
-        attachments.append(msg.attachments[0])
-    else:
+  attachments=[]
+  try:
+    msgs = await ctx.channel.history(limit=100).flatten()
+    msgcount = -1
+    while True:
+      msgcount += 1
+      msg = msgs[msgcount]
+      if msg == None:
+        break;
       try:
         if msg.content.split("https://")[1].split(" ")[0]:
-          print(1)
+          try:
+            imgurl = "https://"+str(msg.content.split("https://")[1].split(" ")[0])
+          except:
+            if True:
+              print(0)
+          finally:
+            if imgurl.startswith("https://tenor.com"):
+              splitImgurl = imgurl.split("-")
+              imgid = splitImgurl[len(splitImgurl)-1]
+              gifJson = requests.get("https://g.tenor.com/v1/gifs?ids="+imgid+"&key="+tenorKey)
+              gifJson = json.loads(gifJson.content)
+              gif = gifJson["results"][0]["media"][0]["gif"]["url"]
+              attachments.append(gif)
+              break;
+            elif imgurl.startswith("https://media.discordapp.net") or imgurl.startswith("https://cdn.discordapp.com"):
+              attachments.append(imgurl)
+              break;
       except:
         if False:
           print(0)
+      if msg.attachments != [] and msg.attachments[0] != None:
+        filename = msg.attachments[0].filename.lower()
+        if filename.endswith(".png") or filename.endswith(".jpg") or filename.endswith(".gif"):
+          attachments.append(msg.attachments[0])
+          break;
+  except:
+    return None
   return attachments
       
 def randomStr(length, letters="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
@@ -66,26 +93,27 @@ appid = 907439983579758632 # app id
 activity = discord.Activity(type=discord.ActivityType.watching, name="you")
 
 discord.MemberCacheFlags.all()
-
 bot = commands.Bot(command_prefix=bprefix,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
 bot.intents.members=True
 discord.Intents.members=True
 
-versionnum = 1.2 # version number
+versionnum = 1.5 # version number
 revision = 0 # revision number
 activitythings = [
   discord.Activity(type=discord.ActivityType.watching, name="%SERVERS% servers"),
   discord.Game(name="Type @GBot prefix for the server prefix"),
   discord.Game(name="some game idk"),
   discord.Activity(type=discord.ActivityType.watching, name="how to be funny"),
-  discord.Activity(type=discord.ActivityType.listening, name="the matrix"),
+  discord.Activity(type=discord.ActivityType.listening, name="the irl matrix"),
   discord.Game(name="@GBot help"),
-  discord.Activity(type=5, name="the trolling competition"),
-  discord.Game(name="#RIPBOZO @esmBot")
+  discord.Activity(type=5, name="the trolling competition")
 ]
 a=0
-memes = requests.get("https://api.reddit.com/r/memes/hot?limit=100")
-dankmemes = requests.get("https://api.reddit.com/r/dankmemes/hot?limit=100")
+try:
+  memes = requests.get("https://api.reddit.com/r/memes/hot?limit=100")
+  dankmemes = requests.get("https://api.reddit.com/r/dankmemes/hot?limit=100")
+except:
+  print("Failed to get memes")
 headers = requests.utils.default_headers()
 async def updateMemes():
   global memes
@@ -96,10 +124,13 @@ async def updateMemes():
       'User-Agent': randomStr(50),
     }
   )
-  memes = requests.get("https://api.reddit.com/r/memes/hot?limit=100", headers=headers)
-  def updDank():
-    dankmemes = requests.get("https://api.reddit.com/r/dankmemes/hot?limit=100", headers=headers)
-  threading.Timer(300, updDank).start()
+  try:
+    memes = requests.get("https://api.reddit.com/r/memes/hot?limit=100", headers=headers)
+    def updDank():
+      dankmemes = requests.get("https://api.reddit.com/r/dankmemes/hot?limit=100", headers=headers)
+    threading.Timer(300, updDank).start()
+  except:
+    print("Failed to get memes")
 def memeFunc():
   asyncio.run(looptwo())
 async def looptwo():
@@ -118,10 +149,25 @@ def coolFunc():
 async def loop():
   threading.Timer(15, coolFunc).start()
   await updateActivity()
-
+downtimeStrt=0
 @bot.event
 async def on_ready():
   await loop()
+@bot.event
+async def on_disconnect():
+  global downtimeStrt
+  print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+  if downtimeStrt == 0:
+    downtimeStrt = clock.time()
+  print("Connection to discord failed. Attempting to reconnect...")
+  bot = None
+  bot = commands.Bot(command_prefix=bprefix,help_command=None) # make a bot with no help command with prefix as the prefix for all commands
+  bot.run(token)
+#@bot.event
+#async def on_connect():
+#  global downtimeStrt
+#  print(clock.time() - downtimeStrt)
+#  downtimeStrt = 0
 def hex_format(color):
   try:
     return (int(color[0:2], 16),int(color[2:4], 16),int(color[4:6], 16), int(color[6:8], 16) if (len(color) > 7) else 255)
@@ -138,7 +184,6 @@ async def ping(ctx): #ctx = context for message
   await ctx.send(':ping_pong: Pong! ('+str(timesend)+' ms)') # await send function
 
 def get_avg_fps(PIL_Image_object):
-    """ Returns the average framerate of a PIL Image object """
     PIL_Image_object.seek(0)
     frames = []
     while True:
@@ -182,7 +227,9 @@ async def prefix(ctx, prefix=None):
   if prefix == None:
     await ctx.send("My prefix for this server is: "+[await bprefix(bot, ctx)][0])
   else:
-    if len(prefix) >= 1 and len(prefix) <= 20:
+    if ctx.message.mentions != [] or ctx.message.mention_everyone == True or ctx.message.role_mentions != []:
+      await ctx.send("Your bot prefix must not be a mention!")
+    elif len(prefix) >= 1 and len(prefix) <= 20:
       if len(cur.fetchall()) == 0:
         cur.execute("INSERT INTO `settings`(`servid`, `prefix`) VALUES ('"+str(ctx.guild.id)+"', '"+escapestr(prefix)+"')")
         con.commit()
@@ -264,7 +311,7 @@ async def overlay(ctx, mode=0):
         
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
-      frames[0].save("./temp/img/"+fileName+"overlay.gif", duration = get_avg_fps(img if whichImg else imgtwo), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      frames[0].save("./temp/img/"+fileName+"overlay.gif", transparency=0, disposal = 2, duration = get_avg_fps(img if whichImg else imgtwo), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
       file = open("./temp/img/"+fileName+"overlay.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
@@ -308,9 +355,19 @@ async def noise(ctx, grayscale=False, wid=None, hgt=None):
 #invert command
 @bot.command()
 async def invert(ctx):
-  if len(ctx.message.attachments) >= 1: # if 1 image is attached
-    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-    if url.lower().endswith(".png") or url.lower().endswith(".jpg"): # if image is png or jpg
+
+  url = None
+  if ctx.message.attachments == []: #if an attachment isnt attached
+    url = str([await getRecentImg(ctx)][0][0]) # get the most recent file sent
+  elif ctx.message.attachments[0] != None:
+    url = str(ctx.message.attachments[0].url)
+  if url != None: # if 1 image is found
+    check = True
+    gif = False
+    if url.startswith("https://media.tenor.com"):
+      gif = True
+      check = False
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg") or (check == False and gif == False): # if image is png or jpg
       imgdata = requests.get(url) # get the image
       img = Image.open(toimg(imgdata.content)) # open it
       fileName = randomStr(24) 
@@ -318,16 +375,16 @@ async def invert(ctx):
       wid, hgt = img.size # get the image size
       imgmix = Image.new("RGBA", (wid,hgt), (255, 255, 255, 255)) # make a new image with the image size
       pixel = 0
-      for y in range(hgt):
-        for x in range(wid):
-          pixel = img.getpixel((x,y)) # get pixel 
-          imgmix.putpixel((x, y), (255-pixel[0], 255-pixel[1], 255-pixel[2], pixel[3])) # draw pixel with inverted color to imgmix
+      imgrgb = Image.new("RGB", (wid,hgt), (255, 255, 255, 255))
+      imgrgb.paste(img, (0, 0), img)
+      mask = img.split()[-1].convert('L')
+      imgmix.paste(ImageOps.invert(imgrgb), (0, 0), mask=mask)
       imgmix.save("./temp/img/"+fileName+"invert.png") # save to use
       file = open("./temp/img/"+fileName+"invert.png", "rb", buffering = 0) #open file
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
       file.close() # close file to prevent memory leak
       os.remove("./temp/img/"+fileName+"invert.png") # remove file
-    elif url.lower().endswith(".gif"):
+    elif url.lower().endswith(".gif") or (check == False and gif == True):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       frames = []
       imgdata = requests.get(url) # get the image
@@ -347,7 +404,7 @@ async def invert(ctx):
         frames.append(imgmix)
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
-      frames[0].save("./temp/img/"+fileName+"invert.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      frames[0].save("./temp/img/"+fileName+"invert.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
       file = open("./temp/img/"+fileName+"invert.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
@@ -404,9 +461,19 @@ async def welcome(ctx, user="self"):
 #horiz flip command
 @bot.command()
 async def flip(ctx):
-  if len(ctx.message.attachments) >= 1: # if 1 image is attached
-    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-    if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
+  url = None
+  if ctx.message.attachments == []: #if an attachment isnt attached
+    url = str([await getRecentImg(ctx)][0][0]) # get the most recent file sent
+  elif ctx.message.attachments[0] != None:
+    url = str(ctx.message.attachments[0].url)
+  print("""\n""")
+  if url != None: #if an attachment is attached
+    check = True
+    gif = False
+    if url.startswith("https://media.tenor.com"):
+      gif = True
+      check = False
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg") or (check == False and gif == False):
       imgdata = requests.get(url)
       img = Image.open(toimg(imgdata.content))
       fileName = randomStr(24)
@@ -417,7 +484,7 @@ async def flip(ctx):
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
       file.close() # close file to prevent memory leak
       os.remove("./temp/img/"+fileName+"flipped.png") # remove file
-    elif url.lower().endswith(".gif"):
+    elif url.lower().endswith(".gif")  or (check == False and gif == True):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       frames = []
       imgdata = requests.get(url) # get the image
@@ -431,7 +498,7 @@ async def flip(ctx):
         frames.append(imgt)
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
-      frames[0].save("./temp/img/"+fileName+"flipped.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      frames[0].save("./temp/img/"+fileName+"flipped.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
       file = open("./temp/img/"+fileName+"flipped.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
@@ -463,7 +530,7 @@ async def speed(ctx):
           frames.append(imgt)
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
-      frames[0].save("./temp/img/"+fileName+"speed.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      frames[0].save("./temp/img/"+fileName+"speed.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
       file = open("./temp/img/"+fileName+"speed.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
@@ -496,13 +563,13 @@ async def slow(ctx):
         frames.append(imgt)
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
-      frames[0].save("./temp/img/"+fileName+"speed.gif", duration = (get_avg_fps(img)*2), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
-      file = open("./temp/img/"+fileName+"speed.gif", "rb", buffering = 0)
+      frames[0].save("./temp/img/"+fileName+"slow.gif", transparency=0, disposal = 2, duration = (get_avg_fps(img)*2), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      file = open("./temp/img/"+fileName+"slow.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
       await message.delete() # delete the edited message
       file.close() # stop using the caption file to prevent memory leak
-      os.remove("./temp/img/"+fileName+"speed.gif") # delete the caption file
+      os.remove("./temp/img/"+fileName+"slow.gif") # delete the caption file
     else:
       await ctx.send("Your image must be a GIF animation.")
   else:
@@ -526,13 +593,13 @@ async def reverse(ctx):
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
       frames.reverse()
-      frames[0].save("./temp/img/"+fileName+"speed.gif", duration = (get_avg_fps(img)*2), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
-      file = open("./temp/img/"+fileName+"speed.gif", "rb", buffering = 0)
+      frames[0].save("./temp/img/"+fileName+"reverse.gif", transparency=0, disposal = 2, duration = (get_avg_fps(img)*2), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      file = open("./temp/img/"+fileName+"reverse.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
       await message.delete() # delete the edited message
       file.close() # stop using the caption file to prevent memory leak
-      os.remove("./temp/img/"+fileName+"speed.gif") # delete the caption file
+      os.remove("./temp/img/"+fileName+"reverse.gif") # delete the caption file
     else:
       await ctx.send("Your image must be a GIF animation.")
   else:
@@ -550,9 +617,19 @@ async def wave(ctx, wavesize=None):
   finally:
     if wavesize >= 300:
       wavesize = 300
-    if len(ctx.message.attachments) >= 1: # if 1 image is attached
-      url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-      if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
+    url = None
+    if ctx.message.attachments == []: #if an attachment isnt attached
+      url = str([await getRecentImg(ctx)][0][0]) # get the most recent file sent
+    elif ctx.message.attachments[0] != None:
+      url = str(ctx.message.attachments[0].url)
+    print("""\n""")
+    if url != None: #if an attachment is attached
+      check = True
+      gif = False
+      if url.startswith("https://media.tenor.com"):
+        gif = True
+        check = False
+      if url.lower().endswith(".png") or url.lower().endswith(".jpg")  or (check == False and gif == False):
         imgdata = requests.get(url)
         img = Image.open(toimg(imgdata.content))
         fileName = randomStr(24)
@@ -569,7 +646,7 @@ async def wave(ctx, wavesize=None):
         await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
         file.close() # close file to prevent memory leak
         os.remove("./temp/img/"+fileName+"wave.png") # remove file
-      elif url.lower().endswith(".gif"):
+      elif url.lower().endswith(".gif")  or (check == False and gif == True):
         message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
         frames = []
         imgdata = requests.get(url) # get the image
@@ -590,7 +667,7 @@ async def wave(ctx, wavesize=None):
           frames.append(imgmix)
         fileName = randomStr(24) #zzzzzzzzzzzz
         byteIO = toimg()
-        frames[0].save("./temp/img/"+fileName+"wave.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+        frames[0].save("./temp/img/"+fileName+"wave.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
         file = open("./temp/img/"+fileName+"wave.gif", "rb", buffering = 0)
         await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
         await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
@@ -604,9 +681,19 @@ async def wave(ctx, wavesize=None):
 #vert flip command
 @bot.command()
 async def flipvert(ctx):
-  if len(ctx.message.attachments) >= 1: # if 1 image is attached
-    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-    if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
+  url = None
+  if ctx.message.attachments == []: #if an attachment isnt attached
+    url = str([await getRecentImg(ctx)][0][0]) # get the most recent file sent
+  elif ctx.message.attachments[0] != None:
+    url = str(ctx.message.attachments[0].url)
+  print("""\n""")
+  if url != None: #if an attachment is attached
+    check = True
+    gif = False
+    if url.startswith("https://media.tenor.com"):
+      gif = True
+      check = False
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg")  or (check == False and gif == False):
       imgdata = requests.get(url)
       img = Image.open(toimg(imgdata.content))
       fileName = randomStr(24)
@@ -617,7 +704,7 @@ async def flipvert(ctx):
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
       file.close() # close file to prevent memory leak
       os.remove("./temp/img/"+fileName+"vflipped.png") # remove file
-    elif url.lower().endswith(".gif"):
+    elif url.lower().endswith(".gif")  or (check == False and gif == True):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       frames = []
       imgdata = requests.get(url) # get the image
@@ -631,7 +718,7 @@ async def flipvert(ctx):
         frames.append(imgt)
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
-      frames[0].save("./temp/img/"+fileName+"vflipped.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      frames[0].save("./temp/img/"+fileName+"vflipped.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
       file = open("./temp/img/"+fileName+"vflipped.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
@@ -674,7 +761,7 @@ async def grayscale(ctx):
         frames.append(imgt)
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
-      frames[0].save("./temp/img/"+fileName+"grayscale.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      frames[0].save("./temp/img/"+fileName+"grayscale.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
       file = open("./temp/img/"+fileName+"grayscale.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
@@ -685,6 +772,70 @@ async def grayscale(ctx):
       await ctx.send("Your image must be a PNG, JPG, or GIF image.")
   else:
     await ctx.send("This command requires an image!")
+
+
+@bot.command()
+async def big(ctx, factor=1.5, mode="bilinear"):
+  try:
+    olFactor = factor
+    factor = max(min(float(factor), 5), 1)
+    if factor != olFactor:
+      await ctx.send("Factor must be a decimal between 1 and 5.")
+  except:
+    await ctx.send("Factor must be a decimal between 1 and 5.")
+  url = None
+  if ctx.message.attachments == []: #if an attachment isnt attached
+    url = str([await getRecentImg(ctx)][0][0]) # get the most recent file sent
+  elif ctx.message.attachments[0] != None:
+    url = str(ctx.message.attachments[0].url)
+  if url != None: # if 1 image is found
+    check = True
+    gif = False
+    if url.startswith("https://media.tenor.com"):
+      gif = True
+      check = False
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg") or (check == False and gif == False):
+      imgdata = requests.get(url)
+      img = Image.open(toimg(imgdata.content))
+      fileName = randomStr(24)
+      img = img.convert("RGBA")
+      wid, hgt = img.size
+      img = img.resize((math.floor(wid*factor),math.floor(hgt*factor)), resample=(Image.NEAREST if (mode == 1 or str(mode).lower() == "nearest" or str(mode).lower() == "neighbor" or str(mode).lower() == "neighbour") else Image.BILINEAR))
+      img = img.convert("RGBA")
+      img.save("./temp/img/"+fileName+"big.png") # save to use
+      file = open("./temp/img/"+fileName+"big.png", "rb", buffering = 0) #open file
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
+      file.close() # close file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"big.png") # remove file
+    elif url.lower().endswith(".gif") or (check == False and gif == True):
+      message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
+      frames = []
+      imgdata = requests.get(url) # get the image
+      img = Image.open(toimg(imgdata.content))
+      for frame in ImageSequence.Iterator(img):
+        imgt = frame.convert("RGBA")
+        wid, hgt = imgt.size
+        imgt = imgt.resize((math.floor(wid*factor),math.floor(hgt*factor)), resample=(Image.NEAREST if (mode == 1 or str(mode).lower() == "nearest" or str(mode).lower() == "neighbor" or str(mode).lower() == "neighbour") else Image.BILINEAR))
+        imgt = imgt.convert("RGBA")
+        byteIO = toimg()
+        frame.save(byteIO, format="GIF")
+        frame = Image.open(byteIO)
+        frames.append(imgt)
+      fileName = randomStr(24) #zzzzzzzzzzzz
+      byteIO = toimg()
+      frames[0].save("./temp/img/"+fileName+"big.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      file = open("./temp/img/"+fileName+"big.gif", "rb", buffering = 0)
+      await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
+      await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
+      await message.delete() # delete the edited message
+      file.close() # stop using the caption file to prevent memory leak
+      os.remove("./temp/img/"+fileName+"big.gif") # delete the caption file
+    else:
+      await ctx.send("Your image must be a PNG, JPG, or GIF image.")
+  else:
+    await ctx.send("This command requires an image!")
+
+
 #jpeg image command
 @bot.command()
 async def jpegify(ctx, quality=None):
@@ -725,7 +876,7 @@ async def jpegify(ctx, quality=None):
           frame = Image.open(byteIO)
           frames.append(imgt)
         byteIO = toimg()
-        frames[0].save("./temp/img/"+fileName+"jpgified.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+        frames[0].save("./temp/img/"+fileName+"jpgified.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
         file = open("./temp/img/"+fileName+"jpgified.gif", "rb", buffering = 0)
         await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
         await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
@@ -742,9 +893,19 @@ async def jpegify(ctx, quality=None):
 #uncaption
 @bot.command()
 async def uncaption(ctx):
-  if len(ctx.message.attachments) >= 1: # if 1 image is attached
-    url = ctx.message.attachments[0].url # blah blah blah im tired of making these comemnts i shouldve made them as i went instead of adding them after
-    if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
+  
+  url = None
+  if ctx.message.attachments == []: #if an attachment isnt attached
+    url = str([await getRecentImg(ctx)][0][0]) # get the most recent file sent
+  elif ctx.message.attachments[0] != None:
+    url = str(ctx.message.attachments[0].url)
+  if url != None: # if 1 image is found
+    check = True
+    gif = False
+    if url.startswith("https://media.tenor.com"):
+      gif = True
+      check = False
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg") or (check == False and gif == False):
       imgdata = requests.get(url)
       img = Image.open(toimg(imgdata.content))
       fileName = randomStr(24)
@@ -767,7 +928,7 @@ async def uncaption(ctx):
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.png")) #vague comment #274
       file.close() # close file to prevent memory leak
       os.remove("./temp/img/"+fileName+"uncaption.png") # remove file
-    elif url.lower().endswith(".gif"):
+    elif url.lower().endswith(".gif") or (check == False and gif == True):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       frames = []
       imgdata = requests.get(url) # get the image
@@ -790,7 +951,7 @@ async def uncaption(ctx):
         frames.append(imgt)
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
-      frames[0].save("./temp/img/"+fileName+"uncaption.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      frames[0].save("./temp/img/"+fileName+"uncaption.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
       file = open("./temp/img/"+fileName+"uncaption.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
@@ -909,15 +1070,20 @@ async def eval(ctx):
 async def caption(ctx, caption):
   attachment = None
   if ctx.message.attachments == []: #if an attachment isnt attached
-    attachment = [await getRecentImg(ctx)][0][0] # get the most recent file sent
+    url = str([await getRecentImg(ctx)][0][0]) # get the most recent file sent
   elif ctx.message.attachments[0] != None:
-    attachment = ctx.message.attachments[0]
-  if attachment != None: #if an attachment is attached
-    url = attachment.url #only get the first one blah blah blah you know the drill
-    if url.lower().endswith(".png") or url.lower().endswith(".jpg"):
+    url = str(ctx.message.attachments[0].url)
+  print("""\n""")
+  if url != None: #if an attachment is attached
+    check = True
+    gif = False
+    if url.startswith("https://media.tenor.com"):
+      gif = True
+      check = False
+    if url.lower().endswith(".png") or url.lower().endswith(".jpg") or (check == False and gif == False):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
-      imgdata = requests.get(url) # get the image
       fileName = randomStr(24) #zzzzzzzzzzzz
+      imgdata = requests.get(url) # get the image
       img = Image.open(toimg(imgdata.content))
       img = img.convert("RGBA")
       wid, hgt = img.size # get the image width and height
@@ -941,7 +1107,7 @@ async def caption(ctx, caption):
       await message.delete() # delete the edited message
       file.close() # stop using the caption file to prevent memory leak
       os.remove("./temp/img/"+fileName+"caption.png") # delete the caption file
-    elif url.lower().endswith(".gif"):
+    elif url.lower().endswith(".gif") or (check == False and gif == True):
       message = await ctx.send("Your image is being processed, this may take a few seconds...") #it takes a while to add a caption to an image, notify the user
       frames = []
       imgdata = requests.get(url) # get the image
@@ -968,7 +1134,7 @@ async def caption(ctx, caption):
         frames.append(captcanv)
       fileName = randomStr(24) #zzzzzzzzzzzz
       byteIO = toimg()
-      frames[0].save("./temp/img/"+fileName+"caption.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+      frames[0].save("./temp/img/"+fileName+"caption.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), optimize=False, loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
       file = open("./temp/img/"+fileName+"caption.gif", "rb", buffering = 0)
       await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
       await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
@@ -987,10 +1153,19 @@ async def duck(ctx, code=None):
     await ctx.send("No input given.")
   else:
     await ctx.send("Hello world")
-
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def purge(ctx, amount):
+  try:
+    amount = int(amount)
+  except:
+    await ctx.send("Please input an integer for how many messages to delete.")
+  finally:
+    await ctx.channel.purge(limit=amount+1)
+    await ctx.send("Purged "+str(amount)+" messages!")
 #pixel image command
 @bot.command()
-async def pixel(ctx, scalewid=None, scalehgt=None, scalemode=None):
+async def small(ctx, scalewid=None, scalehgt=None, scalemode=None):
   if scalemode == None: # if scale mode isnt set
     scalemode = 0 #set to nearest
   try: #see if scalemode is an integer
@@ -1052,13 +1227,13 @@ async def pixel(ctx, scalewid=None, scalehgt=None, scalemode=None):
               frames.append(framedraw)
             fileName = randomStr(24) #zzzzzzzzzzzz
             byteIO = toimg()
-            frames[0].save("./temp/img/"+fileName+"caption.gif", duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
-            file = open("./temp/img/"+fileName+"caption.gif", "rb", buffering = 0)
+            frames[0].save("./temp/img/"+fileName+"pixel.gif", transparency=0, disposal = 2, duration = get_avg_fps(img), loop = 0, save_all=True, append_images=frames[1:]) # save it to the temporary file blah blah blah
+            file = open("./temp/img/"+fileName+"pixel.gif", "rb", buffering = 0)
             await message.edit(content="Sending image...") #edit the message to notify the user that the image is sending and not just my pc being bad
             await ctx.send("Here is your image!", file=discord.File(file, filename="convertedimage.gif")) # send the image
             await message.delete() # delete the edited message
             file.close() # stop using the caption file to prevent memory leak
-            os.remove("./temp/img/"+fileName+"caption.gif") # delete the caption file
+            os.remove("./temp/img/"+fileName+"pixel.gif") # delete the caption file
           else:
             await ctx.send("Your image must be a PNG, JPG, or GIF image.")
       else:
@@ -1263,7 +1438,7 @@ async def cat(ctx):
 helpdef = {"avatar":"Gets a user's avatar. (Arguments: {User (mention)})",
   "noise":"Gives random noise. Defaults to 200x150 colored image. (Arguments: (Grayscale), (Width), (Height))",
   "color":"Gives an image representing the color inputted. (Arguments: {Hex code})",
-  "pixel":"Requires an image. Lowers the resolution of an image and scales it back up (Arguments: [Scale X factor, Scale Y factor, Scaling algorithm (0 - Nearest, 1 - Bilinear)])",
+  "small":"Requires an image. Lowers the resolution of an image and scales it back up (Arguments: [Scale X factor, Scale Y factor, Scaling algorithm (0 - Nearest, 1 - Bilinear)])",
   "echo":"Make the bot say anything! (Arguments: {Message})",
   "caption":"Requires an image. Adds a caption to any image (Arguments: {Caption})",
   "info":"Sends information about the bot",
@@ -1299,35 +1474,57 @@ helpdef = {"avatar":"Gets a user's avatar. (Arguments: {User (mention)})",
   "brainfrick":"Runs brainf█:k code. (Arguments: {Code})"
 } # dictionary containing all of the descriptions for the commands
 @bot.command()
-async def help(ctx, page=1):
+async def help(ctx, pagenum=1):
+  page = pagenum # without this line the shit below wont work and i dont know why
   try:
-    page = int(page)
+    page = math.abs(int(page))
   except:
     page = 1
-  send = """Commands:\n"""
-  embed = discord.Embed(title="Commands", color=discord.Color(1977406)) # make a new embed with title "Commands" with color #1e2c3e
-  cmds = len(bot.commands)
-  cmdstable = []
-  cmdValue = 0
-  cmdssort = [str(p) for p in bot.commands]
-  cmdssort = sorted(cmdssort)
-  for cmd in cmdssort:
-    cmdstable.append(cmd)
-    cmdValue += 1
-  if len(range((page-1)*10, min(cmds, (page*10)))) == 0:
-    await ctx.send("This page is invalid!")
-  else:
-    for cmd in range((page-1)*10, min(cmds, (page*10))): # for each command
-      send += "`"+[await bprefix(bot, ctx)][0]+str(cmdstable[cmd])+"`" + " - " + str(helpdef.get(str(cmdstable[cmd])))+'''\n''' # add it in send string
-    embed.add_field(name="Page "+str(page), value=send) # add the send string to the embed
-    embed.add_field(name="Vote for GBot!",
-                    value="""[Top.gg](https://top.gg/bot/907439983579758632/vote)\n[Vibeslist.cf](https://vibeslist.cf/bot/907439983579758632/vote)\n[Toplist.dev](https://toplist.dev/bot/907439983579758632/vote)"""
-                    , inline=False)
-    embed.set_footer(text="Send "+[await bprefix(bot, ctx)][0]+"help "+str(page+1)+" for the next page")
-    #buttonprevpage = discord.ui.Button(label="prev page", custom_id="prev")
-    
-    #buttonprevpage.coroutine = discord.Interaction(id=random.randint(0, 1000000000), type=discord.InteractionType("component"), application_id=appid)
-    await ctx.send(embed = embed) # send commands
+  btn = Button(label=">", style=discord.ButtonStyle.primary)
+  btnBack = Button(label="<", style=discord.ButtonStyle.primary)
+  view = View()
+  view.add_item(btnBack)
+  view.add_item(btn)
+  async def btnCallback(interact):
+    page=await newpage(False, True, page)
+  async def btnBackCallback(interact):
+    page=await newpage(False, False, page)
+  btn.callback = btnCallback
+  btnBack.callback = btnBackCallback
+  helpmsg = ""
+  async def newpage(z, a, page):
+    global helpmsg
+    if a == True:
+      page += 1
+    elif a == False:
+      page -= 1
+    send = """Commands:\n"""
+    embed = discord.Embed(title="Commands", color=discord.Color(1977406)) # make a new embed with title "Commands" with color #1e2c3e
+    cmds = len(bot.commands)
+    cmdstable = []
+    cmdValue = 0
+    cmdssort = [str(p) for p in bot.commands]
+    cmdssort = sorted(cmdssort)
+    for cmd in cmdssort:
+      cmdstable.append(cmd)
+      cmdValue += 1
+    if len(range((page-1)*10, min(cmds, (page*10)))) != 0:
+      for cmd in range((page-1)*10, min(cmds, (page*10))): # for each command
+        send += "`"+[await bprefix(bot, ctx)][0]+str(cmdstable[cmd])+"`" + " - " + str(helpdef.get(str(cmdstable[cmd])))+'''\n''' # add it in send string
+      embed.add_field(name="Page "+str(page), value=send) # add the send string to the embed
+      embed.add_field(name="Vote for GBot!",
+                      value="""[Top.gg](https://top.gg/bot/907439983579758632/vote)\n[Vibeslist.xyz](https://vibeslist.xyz/bot/907439983579758632/vote)\n[Toplist.dev](https://toplist.dev/bot/907439983579758632/vote)"""
+                      , inline=False)
+      embed.set_footer(text="Send "+[await bprefix(bot, ctx)][0]+"help "+str(page+1)+" for the next page")
+      #buttonprevpage = discord.ui.Button(label="prev page", custom_id="prev")
+      
+      #buttonprevpage.coroutine = discord.Interaction(id=random.randint(0, 1000000000), type=discord.InteractionType("component"), application_id=appid)
+      if z == True:
+        helpmsg = await ctx.send(embed = embed, view=view) # send commands
+      else:
+        await helpmsg.edit(embed = embed, view=view) # send commands
+    return page
+  await newpage(True, None, page)
 
 #echo command
 @bot.command()
@@ -1446,20 +1643,22 @@ async def tictactoe(ctx):
 @bot.event
 async def on_message(ctx):
   for mention in ctx.mentions:
-    cur.execute("SELECT `id` FROM `users` WHERE id = "+str(mention.id)+" AND servid = "+str(ctx.guild.id))
-    if len(cur.fetchall()) != 0:
-      await ctx.reply(mention.name + " is currently AFK!")
+    if ctx.guild:
+      cur.execute("SELECT `id` FROM `users` WHERE id = "+str(mention.id)+" AND servid = "+str(ctx.guild.id))
+      if len(cur.fetchall()) != 0:
+        await ctx.reply(mention.name + " is currently AFK!")
   if ctx.content[0:5] != "g!afk":
-    cur.execute("SELECT `id` FROM `users` WHERE id = "+str(ctx.author.id)+" AND servid = "+str(ctx.guild.id))
-    if len(cur.fetchall()) != 0:
-      cur.execute("DELETE FROM `users` WHERE id="+str(ctx.author.id)+" AND servid = "+ str(ctx.guild.id))
-      con.commit()
-      await ctx.reply(ctx.author.name + " is no longer AFK!")
-      try:
-        if len(ctx.author.name.split(" [AFK]")) == 1:
-          await ctx.author.edit(nick=ctx.author.name.split(" [AFK]")[0])
-      except:
-        print("No permission")
+    if ctx.guild:
+      cur.execute("SELECT `id` FROM `users` WHERE id = "+str(ctx.author.id)+" AND servid = "+str(ctx.guild.id))
+      if len(cur.fetchall()) != 0:
+        cur.execute("DELETE FROM `users` WHERE id="+str(ctx.author.id)+" AND servid = "+ str(ctx.guild.id))
+        con.commit()
+        await ctx.reply(ctx.author.name + " is no longer AFK!")
+        try:
+          if len(ctx.author.name.split(" [AFK]")) == 1:
+            await ctx.author.edit(nick=ctx.author.name.split(" [AFK]")[0])
+        except:
+          print("No permission")
   a = 0
   try:
     if ctx.mentions != [] and ctx.mentions[0].id == 907439983579758632:
@@ -1509,12 +1708,12 @@ async def on_message(ctx):
 @bot.event
 async def on_command_error(ctx, error):
     try:
-        if type(error) == discord.ext.commands.errors.CommandNotFound:
-            await ctx.send("This command does not exist! Type `@GBot help` for a list of commands.")
-        else:
+        if type(error) != discord.ext.commands.errors.CommandNotFound:
+            #await ctx.send("This command does not exist! Type `@GBot help` for a list of commands.")
+        #else:
             await ctx.send(error)
     except Exception as err:
         print(err)
         print(str(ctx.guild.name) + """\n""" + str(ctx.guild.id))
         await ctx.author.send("I seem to be missing permissions for this server: `"+ctx.guild.name+"`. Have you enabled \"Administrator\" under GBot's role in Permissions?")
-bot.run(token)#run the bot
+bot.run(token)
